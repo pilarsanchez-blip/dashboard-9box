@@ -3,8 +3,8 @@ import * as d3 from "d3";
 import JSZip from "jszip";
 import { jsPDF } from "jspdf";
 
-const SHEET_NAMES={inputs:"Inputs",total:"Total por colaborador",competencia:"Por competencia por colaborador",direccion:"Por dirección por colaborador",dirCompetencia:"Por dirección por competencia por colaborador",respuestas:"Respuestas por colaborador"};
-const COL={ciclo:"Ciclo",username:"Username evaluado",nombre:"Nombre Evaluado",puntaje:"Puntaje",difTotal:"Dif con Total",dimension:"Dimensión",difDimension:"Dif con Total por dimensión",direccion:"Dirección",difDireccion:"Dif con Total por dirección",peso:"Peso"};
+const SHEET_NAMES={inputs:"Inputs",total:"Total por colaborador",competencia:"Por competencia por colaborador",direccion:"Por dirección por colaborador",dirCompetencia:"Por dirección por competencia por colaborador",respuestas:"Respuestas por colaborador",comentarios:"Comentarios"};
+const COL={ciclo:"Ciclo",username:"Username evaluado",nombre:"Nombre Evaluado",puntaje:"Puntaje",difTotal:"Dif con Total",dimension:"Dimensión",difDimension:"Dif con Total por dimensión",direccion:"Dirección",difDireccion:"Dif con Total por dirección",peso:"Peso",comentario:"Comentario",preguntaCorta:"Pregunta acortada",evaluador:"Nombre Evaluador"};
 
 /* ─── Palette: celeste-blue gradient, NO green ─── */
 const C={
@@ -218,7 +218,7 @@ const SettingsModal=({config,mapping,onChangeMapping,dirWeights,onChangeDirWeigh
   );
 };
 
-const buildUserData=(data,userId)=>{const matchUser=(r)=>{const u=r[COL.username]||r[COL.nombre];return u===userId;};const tRow=data.total.find(matchUser);if(!tRow)return null;const competencias=data.comp.filter(r=>matchUser(r)&&r[COL.dimension]?.trim()).map(r=>({name:r[COL.dimension],score:parseFloat(r[COL.puntaje])||0,dif:parseFloat(r[COL.difDimension])||0}));const seenDir=new Set();const direcciones=data.dir.filter(matchUser).filter(r=>{const d=r[COL.direccion];if(!d?.trim()||seenDir.has(d))return false;seenDir.add(d);return true;}).map(r=>({name:r[COL.direccion],score:parseFloat(r[COL.puntaje])||0,dif:parseFloat(r[COL.difDireccion])||0,peso:parseFloat(r[COL.peso])||0}));const compDetail={};data.dirComp.filter(matchUser).forEach(r=>{const dim=r[COL.dimension],dir=r[COL.direccion],p=parseFloat(r[COL.puntaje])||0;if(dim?.trim()&&dir?.trim()){if(!compDetail[dim])compDetail[dim]={};compDetail[dim][dir]=p;}});const questions={};data.resp.filter(r=>{const u=r[COL.username]||r["Username evaluado"]||r[COL.nombre]||r["Nombre evaluado"];return u===userId;}).forEach(r=>{const q=r["Pregunta acortada"],dir=r["Dirección"]||r[COL.direccion],dim=r["Dimensión"]||r[COL.dimension],p=parseFloat(r["Puntaje"]||r[COL.puntaje])||0,fullQ=r["Pregunta completa"]||q;if(q?.trim()&&dir?.trim()){const key=q.trim();if(!questions[key])questions[key]={fullQ,dim:dim||"",dirs:{}};questions[key].dirs[dir]=p;}});return{name:tRow[COL.nombre]||"Sin nombre",ciclo:tRow[COL.ciclo]||"",totalScore:parseFloat(tRow[COL.puntaje])||0,totalDif:parseFloat(tRow[COL.difTotal])||0,competencias,direcciones,compDetail,questions};};
+const buildUserData=(data,userId)=>{const matchUser=(r)=>{const u=r[COL.username]||r[COL.nombre];return u===userId;};const tRow=data.total.find(matchUser);if(!tRow)return null;const competencias=data.comp.filter(r=>matchUser(r)&&r[COL.dimension]?.trim()).map(r=>({name:r[COL.dimension],score:parseFloat(r[COL.puntaje])||0,dif:parseFloat(r[COL.difDimension])||0}));const seenDir=new Set();const direcciones=data.dir.filter(matchUser).filter(r=>{const d=r[COL.direccion];if(!d?.trim()||seenDir.has(d))return false;seenDir.add(d);return true;}).map(r=>({name:r[COL.direccion],score:parseFloat(r[COL.puntaje])||0,dif:parseFloat(r[COL.difDireccion])||0,peso:parseFloat(r[COL.peso])||0}));const compDetail={};data.dirComp.filter(matchUser).forEach(r=>{const dim=r[COL.dimension],dir=r[COL.direccion],p=parseFloat(r[COL.puntaje])||0;if(dim?.trim()&&dir?.trim()){if(!compDetail[dim])compDetail[dim]={};compDetail[dim][dir]=p;}});const questions={};data.resp.filter(r=>{const u=r[COL.username]||r["Username evaluado"]||r[COL.nombre]||r["Nombre evaluado"];return u===userId;}).forEach(r=>{const q=r["Pregunta acortada"],dir=r["Dirección"]||r[COL.direccion],dim=r["Dimensión"]||r[COL.dimension],p=parseFloat(r["Puntaje"]||r[COL.puntaje])||0,fullQ=r["Pregunta completa"]||q;if(q?.trim()&&dir?.trim()){const key=q.trim();if(!questions[key])questions[key]={fullQ,dim:dim||"",dirs:{}};questions[key].dirs[dir]=p;}});const comments={};(data.comments||[]).filter(r=>{const u=r[COL.username]||r["Username evaluado"]||r["Username Evaluado"]||r[COL.nombre]||r["Nombre Evaluado"];return u===userId;}).forEach(r=>{const q=(r[COL.preguntaCorta]||r["Pregunta acortada"]||"").trim();const dir=(r[COL.direccion]||r["Dirección"]||r["Direccion"]||"").trim();const com=(r[COL.comentario]||r["Comentario"]||"").trim();const evaluador=(r[COL.evaluador]||r["Nombre Evaluador"]||r["Nombre evaluador"]||"").trim();if(q&&com){if(!comments[q])comments[q]=[];comments[q].push({dir,comment:com,evaluador});}});;return{name:tRow[COL.nombre]||"Sin nombre",ciclo:tRow[COL.ciclo]||"",totalScore:parseFloat(tRow[COL.puntaje])||0,totalDif:parseFloat(tRow[COL.difTotal])||0,competencias,direcciones,compDetail,questions,comments};};
 
 const computeWeightedTotal=(ud,scaleVal,dirWeights)=>{if(!ud||!ud.direcciones.length)return 0;const items=ud.direcciones.map(d=>({dir:d.name,score:scaleVal(d.score)}));return weightedAvgByDir(items,dirWeights);};
 
@@ -527,7 +527,7 @@ const vBars=`<div style="display:flex;align-items:flex-start;justify-content:cen
 const compCards=ud.competencias.map((comp,i)=>{const wc=computeWeightedComp(comp.name,ud.compDetail,(v)=>remapScale(v,config,mapping),dirWeights);const compScoreStr=wc!=null?fmt(wc):sv(comp.score);const detailBars=ud.compDetail[comp.name]?Object.entries(ud.compDetail[comp.name]).map(([dir,val],j)=>hbar(dir,sv(val),"#3575D5",dirWeights[dir]||0)).join(""):"";return`<div style="background:#fff;border-radius:14px;border:1.5px solid #E2E8F0;overflow:hidden"><div style="padding:14px 18px;border-bottom:1px solid #F1F5F9;display:flex;justify-content:space-between;align-items:center"><h4 style="font-size:14px;font-weight:700;margin:0;max-width:55%">${comp.name}</h4><div style="display:flex;align-items:center;gap:8px"><span style="padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;background:${comp.dif>=0?"#D1FAE5":"#FEE2E2"};color:${comp.dif>=0?"#059669":"#DC2626"}">${comp.dif>=0?"↑":"↓"} ${Math.abs(comp.dif).toFixed(1)}</span><span style="font-size:22px;font-weight:800;color:#1D4ED8">${compScoreStr}</span></div></div><div style="padding:16px 18px">${detailBars}</div></div>`;}).join("");
 const cats8=["#3B82F6","#D97706","#8B5CF6","#E89D2D","#EC4899","#0EA5E9","#E45A3B","#B45925"];
 const genRings=(segments,size=60)=>{const n=segments.length,ringW=size/(n*2+2),cx=size/2,cy=size/2;let svg=`<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">`;for(let i=0;i<n;i++){const outerR=cx-(i*ringW)-2,innerR=outerR-ringW+2;const pct=Math.min(segments[i].value/mx,1),angle=pct*2*Math.PI-Math.PI/2,la=pct>0.5?1:0;svg+=`<circle cx="${cx}" cy="${cy}" r="${outerR}" fill="none" stroke="#F1F5F9" stroke-width="${ringW-2}"/>`;if(pct>0.001){const x1=cx+outerR*Math.cos(-Math.PI/2),y1=cy+outerR*Math.sin(-Math.PI/2),x2=cx+outerR*Math.cos(angle),y2=cy+outerR*Math.sin(angle),ix2=cx+innerR*Math.cos(angle),iy2=cy+innerR*Math.sin(angle),ix1=cx+innerR*Math.cos(-Math.PI/2),iy1=cy+innerR*Math.sin(-Math.PI/2);const d=pct>=0.999?`M${cx},${cy-outerR} A${outerR},${outerR} 0 1,1 ${cx-0.01},${cy-outerR} L${cx-0.01},${cy-innerR} A${innerR},${innerR} 0 1,0 ${cx},${cy-innerR} Z`:`M${x1},${y1} A${outerR},${outerR} 0 ${la},1 ${x2},${y2} L${ix2},${iy2} A${innerR},${innerR} 0 ${la},0 ${ix1},${iy1} Z`;svg+=`<path d="${d}" fill="${cats8[i%8]}"/>`;}}svg+=`</svg>`;return svg;};
-const qCards=Object.entries(ud.questions).map(([qName,qData])=>{const segs=Object.entries(qData.dirs).map(([dir,val])=>({label:dir,value:parseFloat(sr(val))}));const items=segs.map((seg,j)=>`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px"><span style="display:flex;align-items:center;gap:6px"><span style="display:inline-block;width:8px;height:8px;border-radius:4px;background:${cats8[j%8]}"></span>${seg.label}</span><span style="font-weight:600">${seg.value.toFixed(1)}</span></div>`).join("");const ringHtml=segs.length>=1?`<div style="flex-shrink:0">${genRings(segs)}</div>`:"";return`<div style="background:#fff;border-radius:14px;border:1.5px solid #E2E8F0;padding:18px;margin-bottom:12px"><div style="display:flex;gap:16px;align-items:center"><div style="flex:1"><h4 style="margin:0 0 4px;font-size:14px;font-weight:700">${qName}</h4>${qData.dim?`<p style="font-size:11px;color:#64748B;margin:0 0 10px">${qData.dim}</p>`:""}${items}</div>${ringHtml}</div></div>`;}).join("");
+const qCards=Object.entries(ud.questions).map(([qName,qData])=>{const segs=Object.entries(qData.dirs).map(([dir,val])=>({label:dir,value:parseFloat(sr(val))}));const items=segs.map((seg,j)=>`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px"><span style="display:flex;align-items:center;gap:6px"><span style="display:inline-block;width:8px;height:8px;border-radius:4px;background:${cats8[j%8]}"></span>${seg.label}</span><span style="font-weight:600">${seg.value.toFixed(1)}</span></div>`).join("");const ringHtml=segs.length>=1?`<div style="flex-shrink:0">${genRings(segs)}</div>`:"";const qComments=(ud.comments||{})[qName]||[];const commentsHtml=qComments.length>0?`<div style="border-top:1px solid #F1F5F9;margin-top:12px;padding-top:10px">${qComments.map((c,ci)=>`<div style="padding:8px 12px;margin-bottom:6px;background:#F8FAFC;border-radius:8px"><div style="margin-bottom:3px"><span style="font-size:11px;font-weight:600;color:#64748B">${c.dir}</span></div><p style="font-size:12px;color:#1E293B;margin:0;line-height:1.5;font-style:italic">${c.comment}</p></div>`).join("")}</div>`:"";return`<div style="background:#fff;border-radius:14px;border:1.5px solid #E2E8F0;padding:18px;margin-bottom:12px"><div style="display:flex;gap:16px;align-items:center"><div style="flex:1"><h4 style="margin:0 0 4px;font-size:14px;font-weight:700">${qName}</h4>${qData.dim?`<p style="font-size:11px;color:#64748B;margin:0 0 10px">${qData.dim}</p>`:""}${items}</div>${ringHtml}</div>${commentsHtml}</div>`;}).join("");
 const dirHeaders=ud.direcciones.map(d=>`<th style="text-align:center;padding:10px;font-size:11px;color:#64748B;${(dirWeights[d.name]||0)===0?"opacity:0.35":""}">${d.name}</th>`).join("");
 const compRows=ud.competencias.map((c,i)=>{const wc=computeWeightedComp(c.name,ud.compDetail,(v)=>remapScale(v,config,mapping),dirWeights);const compScoreStr=wc!=null?fmt(wc):sv(c.score);const dirCells=ud.direcciones.map(d=>`<td style="text-align:center;padding:10px;${(dirWeights[d.name]||0)===0?"opacity:0.35":""}">${ud.compDetail[c.name]?.[d.name]?sv(ud.compDetail[c.name][d.name]):"-"}</td>`).join("");return`<tr style="background:${i%2===0?"#fff":"#F8FAFC"}"><td style="padding:10px;font-weight:600">${c.name}</td><td style="text-align:center;padding:10px;font-weight:700;color:#1D4ED8">${compScoreStr}</td><td style="text-align:center;padding:10px"><span style="padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;background:${c.dif>=0?"#D1FAE5":"#FEE2E2"};color:${c.dif>=0?"#059669":"#DC2626"}">${c.dif>=0?"↑":"↓"} ${Math.abs(c.dif).toFixed(1)}</span></td>${dirCells}</tr>`;}).join("");
 const radarSvg=genRadar(ud.competencias.map(c=>{const wc=computeWeightedComp(c.name,ud.compDetail,(v)=>remapScale(v,config,mapping),dirWeights);return{label:c.name,value:wc!=null?wc:parseFloat(sv(c.score))};}));
@@ -591,13 +591,13 @@ const tt=useTooltip();
 
 const loadData=async()=>{setLoading(true);setError(null);try{
   // Load main sheet
-  const results=await Promise.allSettled([fetchSheet(sheetId,SHEET_NAMES.inputs),fetchSheet(sheetId,SHEET_NAMES.total),fetchSheet(sheetId,SHEET_NAMES.competencia),fetchSheet(sheetId,SHEET_NAMES.direccion),fetchSheet(sheetId,SHEET_NAMES.dirCompetencia),fetchSheet(sheetId,SHEET_NAMES.respuestas)]);
-  const[iR,tR,cR,dR,dcR,rR]=results;
+  const results=await Promise.allSettled([fetchSheet(sheetId,SHEET_NAMES.inputs),fetchSheet(sheetId,SHEET_NAMES.total),fetchSheet(sheetId,SHEET_NAMES.competencia),fetchSheet(sheetId,SHEET_NAMES.direccion),fetchSheet(sheetId,SHEET_NAMES.dirCompetencia),fetchSheet(sheetId,SHEET_NAMES.respuestas),fetchSheet(sheetId,SHEET_NAMES.comentarios)]);
+  const[iR,tR,cR,dR,dcR,rR,comR]=results;
   if(tR.status==="rejected")throw new Error("Error al cargar datos principales");
   const cfg=iR.status==="fulfilled"?parseInputs(iR.value):{scaleMin:0,scaleMax:100,origMin:1,origMax:5};
   setConfig(cfg);setMapping(generateMapping(cfg.origMin,cfg.origMax,cfg.scaleMax,"proportional"));
   const dirData=dR.status==="fulfilled"?dR.value:[];setDirWeights(detectDirections(dirData));
-  setData({total:tR.value,comp:cR.status==="fulfilled"?cR.value:[],dir:dirData,dirComp:dcR.status==="fulfilled"?dcR.value:[],resp:rR.status==="fulfilled"?rR.value:[]});
+  setData({total:tR.value,comp:cR.status==="fulfilled"?cR.value:[],dir:dirData,dirComp:dcR.status==="fulfilled"?dcR.value:[],resp:rR.status==="fulfilled"?rR.value:[],comments:comR.status==="fulfilled"?comR.value:[]});
 
   // Load potencial sheet if provided
   if(potSheetId.trim()){
@@ -816,6 +816,7 @@ const generatePDF=(ud,cfg,mp,dw,weightedScore,labels)=>{
     pdf.text("Preguntas",M,y+4);y+=10;
     questionsArr.forEach(([qName,qData])=>{
       const segs=Object.entries(qData.dirs).map(([dir,val])=>({label:dir,value:sr(val)}));
+      const qComments=(ud.comments||{})[qName]||[];
       const cardH=Math.max(12+segs.length*7, 20);
       checkPage(cardH+4);
       setD("#E2E8F0");pdf.setLineWidth(0.3);pdf.roundedRect(M,y,CW,cardH,2,2,"S");
@@ -830,12 +831,26 @@ const generatePDF=(ud,cfg,mp,dw,weightedScore,labels)=>{
         pdf.setFont("helvetica","bold");pdf.text(fmt(seg.value),M+CW-20,qy+2,{align:"right"});
         qy+=7;
       });
-      // Ring chart on right side
       if(segs.length>=1){
         const ringSize=Math.min(cardH-4, 16);
         drawRing(M+CW-10, y+cardH/2, ringSize, segs);
       }
       y+=cardH+4;
+      // Comments for this question
+      if(qComments.length>0){
+        qComments.forEach((c,ci)=>{
+          const lines=pdf.splitTextToSize(c.comment,CW-16);
+          const cH=6+lines.length*4;
+          checkPage(cH+2);
+          setF("#F1F5F9");pdf.roundedRect(M+2,y,CW-4,cH,1.5,1.5,"F");
+          pdf.setFontSize(6);pdf.setFont("helvetica","bold");setC("#64748B");
+          pdf.text(c.dir,M+6,y+4);
+          pdf.setFontSize(6.5);setC("#1E293B");pdf.setFont("helvetica","italic");
+          pdf.text(lines,M+6,y+8);
+          y+=cH+2;
+        });
+        y+=2;
+      }
     });
   }
 
@@ -894,7 +909,7 @@ const exportZip=async()=>{setExporting(true);setExportProgress("");try{const zip
       const ws=computeWeightedTotal(ud,scaleVal,dirWeights);
       const safeUser=(user.username||"").replace(/[^\w@.-]/g,"_").substring(0,60);
       const safeName=(ud.name||"").replace(/[^\w\s\u00e1\u00e9\u00ed\u00f3\u00fa\u00c1\u00c9\u00cd\u00d3\u00da\u00f1\u00d1,.-]/g,"").replace(/\s+/g,"_").substring(0,60);
-      const fileName=safeUser+"#Evaluaci\u00f3n de desempe\u00f1o 2026-"+safeName+".pdf";
+      const fileName=safeUser+"#Evaluaci\u00f3n de desempe\u00f1o -"+safeName+".pdf";
       try{
         const pdfBuf=generatePDF(ud,config,mapping,dirWeights,ws,scoreLabels);
         zip.file(fileName,pdfBuf);
@@ -1039,11 +1054,21 @@ return(<div style={{minHeight:"100vh",background:C.bg,fontFamily:font}}>
     {questionsArr.length>0&&(<><h3 style={{fontSize:16,fontWeight:700,color:C.text,margin:"0 0 14px",letterSpacing:"-0.02em"}}>Preguntas</h3>
       <div style={{display:"grid",gridTemplateColumns:"1fr",gap:12,marginBottom:22}}>
         {questionsArr.map(([qName,qData],i)=>{const segments=Object.entries(qData.dirs).map(([dir,val])=>({label:dir,value:val,scaled:scaleResp(val)}));
+          const qComments=(userData.comments||{})[qName]||[];
           return(<Card key={i}><div style={{display:"flex",gap:20,alignItems:"center"}}>
             <div style={{flex:1}}><h4 style={{fontSize:13,fontWeight:700,color:C.text,margin:"0 0 4px"}}>{qName}</h4>{qData.dim&&<p style={{fontSize:11,color:C.textLight,margin:"0 0 10px"}}>{qData.dim}</p>}
               {segments.map((seg,j)=>(<div key={j} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",fontSize:13}}><span style={{display:"flex",alignItems:"center",gap:6,fontWeight:500}}><span style={{width:8,height:8,borderRadius:4,background:C.cats[j%8]}}/>{seg.label}</span><span style={{fontWeight:600}}>{fmt(seg.scaled)}</span></div>))}
             </div>{segments.length>=1&&<div style={{flexShrink:0}}><RingChart segments={segments.map(s=>({...s,value:s.scaled}))} maxVal={mx} size={60}/></div>}
-          </div></Card>);
+          </div>
+          {qComments.length>0&&<div style={{borderTop:`1px solid ${C.borderLight}`,marginTop:12,paddingTop:10}}>
+            {qComments.map((c,ci)=>(<div key={ci} style={{padding:"8px 12px",marginBottom:6,background:C.borderLight,borderRadius:8}}>
+              <div style={{marginBottom:3}}>
+                <span style={{fontSize:11,fontWeight:600,color:C.textSec}}>{c.dir}</span>
+              </div>
+              <p style={{fontSize:12,color:C.text,margin:0,lineHeight:1.5,fontStyle:"italic"}}>{c.comment}</p>
+            </div>))}
+          </div>}
+          </Card>);
         })}
       </div></>)}
 
