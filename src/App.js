@@ -36,7 +36,7 @@ const norm=(s)=>s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
 const fmt=(n)=>{const v=parseFloat(n);return isNaN(v)?"0.0":v.toFixed(1);};
 
 /* ─── Scale mapping ─── */
-const generateMapping=(origMin,origMax,scaleMax,preset)=>{const map={};for(let i=origMin;i<=origMax;i++){if(preset==="proportional")map[i]=Math.round((i/origMax)*scaleMax);else map[i]=Math.round(((i-origMin)/(origMax-origMin))*scaleMax);}return map;};
+const generateMapping=(origMin,origMax,scaleMax,preset)=>{const map={};for(let i=origMin;i<=origMax;i++){if(preset==="proportional")map[i]=Math.round((i/origMax)*scaleMax*10)/10;else map[i]=Math.round(((i-origMin)/(origMax-origMin))*scaleMax*10)/10;}return map;};
 const interpolateMapping=(val,mapping)=>{const keys=Object.keys(mapping).map(Number).sort((a,b)=>a-b);if(!keys.length)return val;const n=parseFloat(val);if(isNaN(n))return 0;if(n<=keys[0])return mapping[keys[0]];if(n>=keys[keys.length-1])return mapping[keys[keys.length-1]];for(let i=0;i<keys.length-1;i++){if(n>=keys[i]&&n<=keys[i+1]){const t=(n-keys[i])/(keys[i+1]-keys[i]);return mapping[keys[i]]+t*(mapping[keys[i+1]]-mapping[keys[i]]);}}return mapping[keys[keys.length-1]];};
 const remapScale=(pct,config,mapping)=>{const n=parseFloat(pct);if(isNaN(n))return 0;const origVal=(n/100)*(config.origMax-config.origMin)+config.origMin;return interpolateMapping(origVal,mapping);};
 const remapResp=(val,config,mapping)=>{const n=parseFloat(val);if(isNaN(n))return 0;return interpolateMapping(n,mapping);};
@@ -199,9 +199,9 @@ const SettingsModal=({config,mapping,onChangeMapping,dirWeights,onChangeDirWeigh
                 <div key={k} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:C.borderLight,borderRadius:10}}>
                   <div style={{width:28,height:28,borderRadius:7,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",color:C.white,fontSize:13,fontWeight:700,flexShrink:0}}>{k}</div>
                   <span style={{fontSize:12,color:C.textSec,flexShrink:0}}>→</span>
-                  <input type="range" min="0" max={maxOut} step="1" value={localMapping[k]} onChange={e=>setLocalMapping(p=>({...p,[k]:parseInt(e.target.value)}))} style={{flex:1,accentColor:C.primary,cursor:"pointer"}}/>
+                  <input type="range" min="0" max={maxOut} step="0.1" value={localMapping[k]||0} onChange={e=>setLocalMapping(p=>({...p,[k]:parseFloat(e.target.value)}))} style={{flex:1,accentColor:C.primary,cursor:"pointer"}}/>
                   <div style={{display:"flex",alignItems:"center",gap:2,flexShrink:0}}>
-                    <input type="number" min="0" max={maxOut} value={localMapping[k]} onChange={e=>setLocalMapping(p=>({...p,[k]:Math.max(0,Math.min(maxOut,parseInt(e.target.value)||0))}))} style={{width:46,padding:"3px 4px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:12,fontWeight:600,textAlign:"center",fontFamily:font,color:C.primary,outline:"none"}}/>
+                    <input type="text" inputMode="decimal" value={localMapping[k]??""} onChange={e=>{const v=e.target.value.replace(",",".");if(v===""||v==="-"||/^-?\d*\.?\d*$/.test(v)){const n=parseFloat(v);setLocalMapping(p=>({...p,[k]:isNaN(n)?0:Math.max(0,Math.min(maxOut,n))}));}}} style={{width:52,padding:"3px 4px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:12,fontWeight:600,textAlign:"center",fontFamily:font,color:C.primary,outline:"none"}}/>
                     <span style={{fontSize:10,color:C.textLight}}>%</span>
                   </div>
                 </div>
@@ -909,7 +909,7 @@ const exportZip=async()=>{setExporting(true);setExportProgress("");try{const zip
       const ws=computeWeightedTotal(ud,scaleVal,dirWeights);
       const safeUser=(user.username||"").replace(/[^\w@.-]/g,"_").substring(0,60);
       const safeName=(ud.name||"").replace(/[^\w\s\u00e1\u00e9\u00ed\u00f3\u00fa\u00c1\u00c9\u00cd\u00d3\u00da\u00f1\u00d1,.-]/g,"").replace(/\s+/g,"_").substring(0,60);
-      const fileName=safeUser+"#Evaluaci\u00f3n de desempe\u00f1o -"+safeName+".pdf";
+      const fileName=safeUser+"#Evaluaci\u00f3n de desempe\u00f1o 2026-"+safeName+".pdf";
       try{
         const pdfBuf=generatePDF(ud,config,mapping,dirWeights,ws,scoreLabels);
         zip.file(fileName,pdfBuf);
@@ -1020,10 +1020,6 @@ return(<div style={{minHeight:"100vh",background:C.bg,fontFamily:font}}>
           <div style={{fontSize:12,opacity:0.8,marginBottom:4,fontWeight:500}}>Evaluado</div>
           <div style={{fontSize:22,fontWeight:700,letterSpacing:"-0.02em"}}>{userData.name}</div>
           {userData.ciclo&&<div style={{fontSize:11,opacity:0.7,marginTop:4}}>{userData.ciclo}</div>}
-          {nineBoxPosition&&<div style={{marginTop:8,display:"flex",gap:8,alignItems:"center"}}>
-            <span style={{padding:"4px 12px",borderRadius:8,fontSize:11,fontWeight:600,background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.3)"}}>🧩 {nineBoxPosition.cellInfo.label}</span>
-            <span style={{fontSize:11,opacity:0.8}}>Potencial: {fmt(nineBoxPosition.potScore)}</span>
-          </div>}
         </div>
         <div style={{textAlign:"right"}}>
           <div style={{fontSize:12,opacity:0.8,marginBottom:4,fontWeight:500}}>Puntaje Ponderado</div>
