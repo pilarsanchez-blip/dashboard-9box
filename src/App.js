@@ -18,7 +18,6 @@ const C={
   scale:["#E0EFFE","#BAD8FB","#93C0F7","#6BA5F0","#4A8BE5","#3575D5","#2960BD","#1E4DA3","#153C88","#0D2B6B"],
   cats:["#3B82F6","#D97706","#8B5CF6","#E89D2D","#EC4899","#0EA5E9","#E45A3B","#B45925"],
   diffUp:"#059669",diffUpBg:"#D1FAE5",diffDown:"#DC2626",diffDownBg:"#FEE2E2",
-  // 9-Box palette
   nineBox:{
     topLeft:"#2563EB",topMid:"#1D4ED8",topRight:"#1E3A8A",
     midLeft:"#3B82F6",midMid:"#2563EB",midRight:"#1D4ED8",
@@ -31,14 +30,16 @@ const font=`'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif`;
 const blueShade=(val,max)=>{const pct=Math.min(Math.max(parseFloat(val)/max,0),1);const idx=Math.min(Math.floor(pct*C.scale.length),C.scale.length-1);return C.scale[idx];};
 
 const fetchSheet=async(id,name)=>{const url=`https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(name)}`;const r=await fetch(url);if(!r.ok)throw new Error(name);return d3.csvParse(await r.text()).map(row=>{const c={};for(const[k,v] of Object.entries(row)){if(k&&k.trim()!=="")c[k.trim()]=v;}return c;});};
-const parseInputs=(rows)=>{let scaleMin=0,scaleMax=100,origMin=1,origMax=5;for(const r of rows){const keys=Object.keys(r);const f=(r[keys[0]]||"").trim().toLowerCase();if(f.includes("mínimo")||f.includes("minimo")){origMin=parseFloat(r[keys[1]])||1;scaleMin=parseFloat(r[keys[2]])||parseFloat(r[keys[1]])||0;}if(f.includes("máximo")||f.includes("maximo")){origMax=parseFloat(r[keys[1]])||5;scaleMax=parseFloat(r[keys[2]])||parseFloat(r[keys[1]])||100;}}return{scaleMin,scaleMax,origMin,origMax};};
+const parseInputs=(rows)=>{let scaleMin=0,scaleMax=5,origMin=1,origMax=5;for(const r of rows){const keys=Object.keys(r);const f=(r[keys[0]]||"").trim().toLowerCase();if(f.includes("mínimo")||f.includes("minimo")){origMin=parseFloat(r[keys[1]])||1;scaleMin=parseFloat(r[keys[2]])||parseFloat(r[keys[1]])||1;}if(f.includes("máximo")||f.includes("maximo")){origMax=parseFloat(r[keys[1]])||5;scaleMax=parseFloat(r[keys[2]])||parseFloat(r[keys[1]])||5;}}return{scaleMin,scaleMax,origMin,origMax};};
 const norm=(s)=>s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
 const fmt=(n)=>{const v=parseFloat(n);return isNaN(v)?"0.0":v.toFixed(1);};
 
 /* ─── Scale mapping ─── */
 const generateMapping=(origMin,origMax,scaleMax,preset)=>{const map={};for(let i=origMin;i<=origMax;i++){if(preset==="proportional")map[i]=Math.round((i/origMax)*scaleMax*10)/10;else map[i]=Math.round(((i-origMin)/(origMax-origMin))*scaleMax*10)/10;}return map;};
 const interpolateMapping=(val,mapping)=>{const keys=Object.keys(mapping).map(Number).sort((a,b)=>a-b);if(!keys.length)return val;const n=parseFloat(val);if(isNaN(n))return 0;if(n<=keys[0])return mapping[keys[0]];if(n>=keys[keys.length-1])return mapping[keys[keys.length-1]];for(let i=0;i<keys.length-1;i++){if(n>=keys[i]&&n<=keys[i+1]){const t=(n-keys[i])/(keys[i+1]-keys[i]);return mapping[keys[i]]+t*(mapping[keys[i+1]]-mapping[keys[i]]);}}return mapping[keys[keys.length-1]];};
-const remapScale=(pct,config,mapping)=>{const n=parseFloat(pct);if(isNaN(n))return 0;const origVal=(n/100)*(config.origMax-config.origMin)+config.origMin;return interpolateMapping(origVal,mapping);};
+
+/* ─── FIX: datos ya vienen en escala origMin-origMax, pasar directo al mapping ─── */
+const remapScale=(pct,config,mapping)=>{const n=parseFloat(pct);if(isNaN(n))return 0;return interpolateMapping(n,mapping);};
 const remapResp=(val,config,mapping)=>{const n=parseFloat(val);if(isNaN(n))return 0;return interpolateMapping(n,mapping);};
 
 /* ─── Direction weights ─── */
@@ -46,7 +47,7 @@ const detectDirections=(dirData)=>{const dirs={};dirData.forEach(r=>{const d=r[C
 const weightedAvgByDir=(items,dirWeights)=>{const v=items.filter(it=>(dirWeights[it.dir]||0)>0);if(!v.length)return 0;const tw=v.reduce((s,it)=>s+(dirWeights[it.dir]||0),0);return tw===0?0:v.reduce((s,it)=>s+it.score*(dirWeights[it.dir]||0),0)/tw;};
 
 /* ─── Score labels ─── */
-const DEFAULT_LABELS=[{min:0,max:25,label:"No cumple",color:"#DC2626"},{min:26,max:50,label:"En desarrollo",color:"#D97706"},{min:51,max:75,label:"Cumple",color:"#3B82F6"},{min:76,max:100,label:"Supera",color:"#1D4ED8"}];
+const DEFAULT_LABELS=[{min:0,max:1.99,label:"No cumple",color:"#DC2626"},{min:2,max:2.99,label:"En desarrollo",color:"#D97706"},{min:3,max:3.99,label:"Cumple",color:"#3B82F6"},{min:4,max:5,label:"Supera",color:"#1D4ED8"}];
 const getScoreLabel=(score,labels)=>{const n=parseFloat(score);if(isNaN(n))return null;return labels.find(l=>n>=l.min&&n<=l.max)||null;};
 
 const useTooltip=()=>{const[tip,setTip]=useState(null);const show=(e,content)=>{const r=e.currentTarget.getBoundingClientRect();setTip({x:r.left+r.width/2,y:r.top-8,content});};const hide=()=>setTip(null);const Tip=()=>tip?<div style={{position:"fixed",left:tip.x,top:tip.y,transform:"translate(-50%,-100%)",background:C.text,color:"#fff",padding:"8px 14px",borderRadius:10,fontSize:12,fontWeight:500,zIndex:9999,pointerEvents:"none",whiteSpace:"pre-line",maxWidth:280,boxShadow:"0 4px 16px rgba(0,0,0,0.15)",lineHeight:1.4}}>{tip.content}</div>:null;return{show,hide,Tip};};
@@ -96,21 +97,38 @@ const UserSearch=({users,selectedUser,onSelect})=>{const[query,setQuery]=useStat
   </div>}
 </div>);};
 
-/* ─── Settings Modal with 3 tabs ─── */
-const SettingsModal=({config,mapping,onChangeMapping,dirWeights,onChangeDirWeights,scoreLabels,onChangeScoreLabels,onClose})=>{
+/* ─── Settings Modal con tab Escala mejorado ─── */
+const SettingsModal=({config,mapping,onChangeMapping,dirWeights,onChangeDirWeights,scoreLabels,onChangeScoreLabels,onChangeConfig,onClose})=>{
   const[localMapping,setLocalMapping]=useState({...mapping});
   const[localWeights,setLocalWeights]=useState({...dirWeights});
   const[localLabels,setLocalLabels]=useState(scoreLabels.map(l=>({...l})));
   const[activePreset,setActivePreset]=useState(null);
   const[tab,setTab]=useState("weights");
+  // ─── Escala editable ───
+  const[localOrigMin,setLocalOrigMin]=useState(config.origMin);
+  const[localOrigMax,setLocalOrigMax]=useState(config.origMax);
+  const[localScaleMin,setLocalScaleMin]=useState(config.scaleMin);
+  const[localScaleMax,setLocalScaleMax]=useState(config.scaleMax);
+
   const keys=Object.keys(localMapping).map(Number).sort((a,b)=>a-b);
   const dirNames=Object.keys(localWeights).sort();
-  const applyPreset=(p)=>{setLocalMapping(generateMapping(config.origMin,config.origMax,config.scaleMax,p));setActivePreset(p);};
-  useEffect(()=>{for(const p of["proportional","normalized"]){const ref=generateMapping(config.origMin,config.origMax,config.scaleMax,p);if(keys.every(k=>Math.abs((localMapping[k]||0)-(ref[k]||0))<0.5)){setActivePreset(p);return;}}setActivePreset("custom");},[localMapping,config,keys]);
+
+  const rebuildMapping=(oMin,oMax,sMax,preset)=>{setLocalMapping(generateMapping(oMin,oMax,sMax,preset||activePreset||"proportional"));};
+
+  const applyPreset=(p)=>{setLocalMapping(generateMapping(localOrigMin,localOrigMax,localScaleMax,p));setActivePreset(p);};
+  useEffect(()=>{for(const p of["proportional","normalized"]){const ref=generateMapping(localOrigMin,localOrigMax,localScaleMax,p);if(keys.every(k=>Math.abs((localMapping[k]||0)-(ref[k]||0))<0.5)){setActivePreset(p);return;}}setActivePreset("custom");},[localMapping,localOrigMin,localOrigMax,localScaleMax]);
   const totalW=dirNames.reduce((s,d)=>s+(localWeights[d]||0),0);
-  const maxOut=config.scaleMax;
-  const handleSave=()=>{onChangeMapping(localMapping);onChangeDirWeights(localWeights);onChangeScoreLabels(localLabels);onClose();};
-  const addLabel=()=>{const last=localLabels.length?localLabels[localLabels.length-1].max+1:0;setLocalLabels([...localLabels,{min:last,max:Math.min(last+24,100),label:"Nueva etiqueta",color:C.cats[localLabels.length%8]}]);};
+  const maxOut=localScaleMax;
+
+  const handleSave=()=>{
+    onChangeMapping(localMapping);
+    onChangeDirWeights(localWeights);
+    onChangeScoreLabels(localLabels);
+    onChangeConfig({origMin:localOrigMin,origMax:localOrigMax,scaleMin:localScaleMin,scaleMax:localScaleMax});
+    onClose();
+  };
+
+  const addLabel=()=>{const last=localLabels.length?localLabels[localLabels.length-1].max+0.1:0;setLocalLabels([...localLabels,{min:parseFloat(last.toFixed(1)),max:parseFloat((last+1).toFixed(1)),label:"Nueva etiqueta",color:C.cats[localLabels.length%8]}]);};
   const removeLabel=(i)=>setLocalLabels(localLabels.filter((_,j)=>j!==i));
   const updateLabel=(i,field,val)=>setLocalLabels(localLabels.map((l,j)=>j===i?{...l,[field]:val}:l));
 
@@ -162,9 +180,9 @@ const SettingsModal=({config,mapping,onChangeMapping,dirWeights,onChangeDirWeigh
                   <input type="color" value={l.color} onChange={e=>updateLabel(i,"color",e.target.value)} style={{width:28,height:28,border:"none",borderRadius:6,cursor:"pointer",padding:0}}/>
                   <input value={l.label} onChange={e=>updateLabel(i,"label",e.target.value)} placeholder="Etiqueta..." style={{flex:1,padding:"4px 8px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:12,fontFamily:font,outline:"none",minWidth:0}}/>
                   <div style={{display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
-                    <input type="number" min="0" max="100" value={l.min} onChange={e=>updateLabel(i,"min",parseInt(e.target.value)||0)} style={{width:38,padding:"3px 4px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:11,textAlign:"center",fontFamily:font,outline:"none"}}/>
+                    <input type="number" min="0" max={localScaleMax} step="0.1" value={l.min} onChange={e=>updateLabel(i,"min",parseFloat(e.target.value)||0)} style={{width:38,padding:"3px 4px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:11,textAlign:"center",fontFamily:font,outline:"none"}}/>
                     <span style={{fontSize:10,color:C.textLight}}>–</span>
-                    <input type="number" min="0" max="100" value={l.max} onChange={e=>updateLabel(i,"max",parseInt(e.target.value)||0)} style={{width:38,padding:"3px 4px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:11,textAlign:"center",fontFamily:font,outline:"none"}}/>
+                    <input type="number" min="0" max={localScaleMax} step="0.1" value={l.max} onChange={e=>updateLabel(i,"max",parseFloat(e.target.value)||0)} style={{width:38,padding:"3px 4px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:11,textAlign:"center",fontFamily:font,outline:"none"}}/>
                   </div>
                   <button onClick={()=>removeLabel(i)} style={{background:"none",border:"none",color:C.danger,cursor:"pointer",fontSize:14,padding:"2px 6px"}}>✕</button>
                 </div>
@@ -181,10 +199,28 @@ const SettingsModal=({config,mapping,onChangeMapping,dirWeights,onChangeDirWeigh
           </>}
 
           {tab==="scale"&&<>
+            {/* ─── Edición directa de escala ─── */}
+            <p style={{fontSize:12,color:C.textSec,margin:"0 0 12px",lineHeight:1.5}}>Configurá la escala de los datos y la escala final de visualización. Debe coincidir con lo que está en la pestaña <strong>Inputs</strong> del Sheet.</p>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+              {[
+                {label:"Mín. original (datos)",val:localOrigMin,setter:(v)=>{setLocalOrigMin(v);rebuildMapping(v,localOrigMax,localScaleMax,null);}},
+                {label:"Máx. original (datos)",val:localOrigMax,setter:(v)=>{setLocalOrigMax(v);rebuildMapping(localOrigMin,v,localScaleMax,null);}},
+                {label:"Mín. final (display)",val:localScaleMin,setter:setLocalScaleMin},
+                {label:"Máx. final (display)",val:localScaleMax,setter:(v)=>{setLocalScaleMax(v);rebuildMapping(localOrigMin,localOrigMax,v,null);}},
+              ].map(({label,val,setter})=>(
+                <div key={label}>
+                  <label style={{fontSize:11,fontWeight:600,color:C.textSec,display:"block",marginBottom:4}}>{label}</label>
+                  <input type="number" step="0.1" value={val}
+                    onChange={e=>{const v=parseFloat(e.target.value);if(!isNaN(v))setter(v);}}
+                    style={{width:"100%",padding:"7px 10px",borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:13,fontFamily:font,outline:"none",boxSizing:"border-box",color:C.primary,fontWeight:600}}
+                  />
+                </div>
+              ))}
+            </div>
             <div style={{background:C.borderLight,borderRadius:10,padding:12,marginBottom:16,display:"flex",gap:16,justifyContent:"center"}}>
-              <div style={{textAlign:"center"}}><div style={{fontSize:10,color:C.textLight,fontWeight:500,textTransform:"uppercase"}}>Original</div><div style={{fontSize:15,fontWeight:700,color:C.text}}>{config.origMin}–{config.origMax}</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:10,color:C.textLight,fontWeight:500,textTransform:"uppercase"}}>Original</div><div style={{fontSize:15,fontWeight:700,color:C.text}}>{localOrigMin}–{localOrigMax}</div></div>
               <div style={{width:1,background:C.border}}/>
-              <div style={{textAlign:"center"}}><div style={{fontSize:10,color:C.textLight,fontWeight:500,textTransform:"uppercase"}}>Destino</div><div style={{fontSize:15,fontWeight:700,color:C.primary}}>{config.scaleMin}–{config.scaleMax}</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:10,color:C.textLight,fontWeight:500,textTransform:"uppercase"}}>Destino</div><div style={{fontSize:15,fontWeight:700,color:C.primary}}>{localScaleMin}–{localScaleMax}</div></div>
             </div>
             <div style={{display:"flex",gap:8,marginBottom:16}}>
               {[{id:"proportional",name:"Proporcional",desc:"valor ÷ máx"},{id:"normalized",name:"Normalizada",desc:"mín = 0%"}].map(p=>(
@@ -202,7 +238,6 @@ const SettingsModal=({config,mapping,onChangeMapping,dirWeights,onChangeDirWeigh
                   <input type="range" min="0" max={maxOut} step="0.1" value={localMapping[k]||0} onChange={e=>setLocalMapping(p=>({...p,[k]:parseFloat(e.target.value)}))} style={{flex:1,accentColor:C.primary,cursor:"pointer"}}/>
                   <div style={{display:"flex",alignItems:"center",gap:2,flexShrink:0}}>
                     <input type="text" inputMode="decimal" value={localMapping[k]??""} onChange={e=>{const v=e.target.value.replace(",",".");if(v===""||v==="-"||/^-?\d*\.?\d*$/.test(v)){const n=parseFloat(v);setLocalMapping(p=>({...p,[k]:isNaN(n)?0:Math.max(0,Math.min(maxOut,n))}));}}} style={{width:52,padding:"3px 4px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:12,fontWeight:600,textAlign:"center",fontFamily:font,color:C.primary,outline:"none"}}/>
-                    <span style={{fontSize:10,color:C.textLight}}>%</span>
                   </div>
                 </div>
               ))}
@@ -265,9 +300,7 @@ const NineBoxView=({data,potData,config,potConfig,scaleVal,potScaleVal,mx,potMx,
   const[hoveredCell,setHoveredCell]=useState(null);
   const[selectedCell,setSelectedCell]=useState(null);
 
-  // Match users between desempeño and potencial by username/name
   const nineBoxData=useMemo(()=>{
-    // Build lookup maps: exact key → row, and normalized name → row
     const potUsersExact={};
     const potUsersNorm={};
     potData.total.forEach(r=>{
@@ -284,11 +317,9 @@ const NineBoxView=({data,potData,config,potConfig,scaleVal,potScaleVal,mx,potMx,
       if(!ud)return null;
       const desScore=computeWeightedTotal(ud,scaleVal,dirWeights);
 
-      // Find matching user in potencial sheet: try exact, then normalized
       const potRow=potUsersExact[u.username]||potUsersExact[u.name]||potUsersNorm[norm(u.username)]||potUsersNorm[norm(u.name)];
       if(!potRow)return null;
 
-      // Build potencial user data
       const potUd=buildUserData(potData,potRow[COL.username]||potRow[COL.nombre]);
       if(!potUd)return null;
       const potScore=computeWeightedTotal(potUd,potScaleVal,potDirWeights);
@@ -298,7 +329,6 @@ const NineBoxView=({data,potData,config,potConfig,scaleVal,potScaleVal,mx,potMx,
     }).filter(Boolean);
   },[data,potData,users,scaleVal,potScaleVal,dirWeights,potDirWeights,mx]);
 
-  // Group by cell
   const grid=useMemo(()=>{
     const g=Array.from({length:3},()=>Array.from({length:3},()=>[]));
     nineBoxData.forEach(u=>{g[u.cell.row][u.cell.col].push(u);});
@@ -318,15 +348,12 @@ const NineBoxView=({data,potData,config,potConfig,scaleVal,potScaleVal,mx,potMx,
       ))}
     </div>
 
-    {/* 9-Box Grid */}
     <Card style={{marginBottom:20}}>
       <div style={{display:"grid",gridTemplateColumns:"40px repeat(3,1fr)",gridTemplateRows:"auto repeat(3,1fr) auto",gap:0,minHeight:480}}>
-        {/* Y-axis label */}
         <div style={{gridRow:"2/5",gridColumn:"1",display:"flex",alignItems:"center",justifyContent:"center"}}>
           <span style={{writingMode:"vertical-rl",transform:"rotate(180deg)",fontSize:12,fontWeight:700,color:C.textSec,letterSpacing:"0.05em"}}>POTENCIAL</span>
         </div>
 
-        {/* Grid cells */}
         {[0,1,2].map(row=>[0,1,2].map(col=>{
           const cellUsers=grid[row][col];
           const cellInfo=NINE_BOX_LABELS.cells[row][col];
@@ -337,17 +364,7 @@ const NineBoxView=({data,potData,config,potConfig,scaleVal,potScaleVal,mx,potMx,
           const pct=totalPeople>0?Math.round((cellUsers.length/totalPeople)*100):0;
 
           return(<div key={`${row}-${col}`}
-            style={{
-              gridRow:row+2,gridColumn:col+2,
-              background:bg,
-              border:`2px solid ${isSelected?"#1E3A8A":isHovered?"#3B82F6":"transparent"}`,
-              borderRadius:10,margin:3,padding:12,
-              cursor:"pointer",
-              transition:"all 0.15s ease",
-              transform:isHovered?"scale(1.02)":"scale(1)",
-              display:"flex",flexDirection:"column",
-              position:"relative",overflow:"hidden",
-            }}
+            style={{gridRow:row+2,gridColumn:col+2,background:bg,border:`2px solid ${isSelected?"#1E3A8A":isHovered?"#3B82F6":"transparent"}`,borderRadius:10,margin:3,padding:12,cursor:"pointer",transition:"all 0.15s ease",transform:isHovered?"scale(1.02)":"scale(1)",display:"flex",flexDirection:"column",position:"relative",overflow:"hidden"}}
             onClick={()=>setSelectedCell(isSelected?null:{row,col})}
             onMouseEnter={()=>setHoveredCell({row,col})}
             onMouseLeave={()=>setHoveredCell(null)}
@@ -359,47 +376,22 @@ const NineBoxView=({data,potData,config,potConfig,scaleVal,potScaleVal,mx,potMx,
             <div style={{fontSize:10,color:txtColor,opacity:0.7,marginBottom:8}}>{pct}%</div>
             <div style={{flex:1,display:"flex",flexDirection:"column",gap:3,overflow:"hidden"}}>
               {cellUsers.slice(0,6).map((u,i)=>(
-                <div key={i}
-                  onClick={e=>{e.stopPropagation();onSelectUser(u.username);}}
-                  onMouseEnter={e=>tt.show(e,`${u.name}\nDesempeño: ${fmt(u.desScore)}\nPotencial: ${fmt(u.potScore)}`)}
-                  onMouseLeave={tt.hide}
-                  style={{
-                    fontSize:11,fontWeight:500,color:txtColor,
-                    padding:"3px 8px",borderRadius:6,
-                    background:"rgba(255,255,255,0.45)",
-                    cursor:"pointer",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",
-                    transition:"background 0.1s",
-                  }}
-                  onMouseOver={e=>e.currentTarget.style.background="rgba(255,255,255,0.75)"}
-                  onMouseOut={e=>e.currentTarget.style.background="rgba(255,255,255,0.45)"}
+                <div key={i} onClick={e=>{e.stopPropagation();onSelectUser(u.username);}} onMouseEnter={e=>tt.show(e,`${u.name}\nDesempeño: ${fmt(u.desScore)}\nPotencial: ${fmt(u.potScore)}`)} onMouseLeave={tt.hide}
+                  style={{fontSize:11,fontWeight:500,color:txtColor,padding:"3px 8px",borderRadius:6,background:"rgba(255,255,255,0.45)",cursor:"pointer",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",transition:"background 0.1s"}}
+                  onMouseOver={e=>e.currentTarget.style.background="rgba(255,255,255,0.75)"} onMouseOut={e=>e.currentTarget.style.background="rgba(255,255,255,0.45)"}
                 >{u.name}</div>
               ))}
-              {cellUsers.length>6&&<div
-                onMouseEnter={e=>tt.show(e,cellUsers.slice(6).map(u=>`${u.name}  (D:${fmt(u.desScore)} P:${fmt(u.potScore)})`).join("\n"))}
-                onMouseLeave={tt.hide}
-                style={{fontSize:10,fontWeight:600,color:txtColor,opacity:0.8,padding:"3px 8px",cursor:"default",borderRadius:6,background:"rgba(255,255,255,0.25)"}}
-              >+{cellUsers.length-6} más</div>}
+              {cellUsers.length>6&&<div onMouseEnter={e=>tt.show(e,cellUsers.slice(6).map(u=>`${u.name}  (D:${fmt(u.desScore)} P:${fmt(u.potScore)})`).join("\n"))} onMouseLeave={tt.hide} style={{fontSize:10,fontWeight:600,color:txtColor,opacity:0.8,padding:"3px 8px",cursor:"default",borderRadius:6,background:"rgba(255,255,255,0.25)"}}>+{cellUsers.length-6} más</div>}
             </div>
           </div>);
         }))}
 
-        {/* Row labels (Y axis) */}
-        {/* They're integrated into the grid via the cell labels */}
-
-        {/* X-axis labels */}
         <div style={{gridRow:5,gridColumn:1}}/>
         {NINE_BOX_LABELS.cols.map((label,i)=>(
           <div key={i} style={{gridRow:5,gridColumn:i+2,textAlign:"center",padding:"8px 0",fontSize:12,fontWeight:600,color:C.textSec}}>{label}</div>
         ))}
-
-        {/* Y-axis labels on left side */}
-        {/* Already handled by the vertical POTENCIAL label */}
-
-        {/* X-axis title */}
         <div style={{gridRow:6,gridColumn:"1/5",textAlign:"center",padding:"4px 0",fontSize:12,fontWeight:700,color:C.textSec,letterSpacing:"0.05em"}}>DESEMPEÑO</div>
       </div>
-
-      {/* Y-axis tick labels */}
       <div style={{position:"absolute",left:52,top:0,bottom:60,display:"flex",flexDirection:"column",justifyContent:"space-around",pointerEvents:"none"}}>
         {NINE_BOX_LABELS.rows.map((label,i)=>(
           <span key={i} style={{fontSize:11,fontWeight:600,color:C.textSec,transform:"translateY(-50%)"}}>{label}</span>
@@ -407,7 +399,6 @@ const NineBoxView=({data,potData,config,potConfig,scaleVal,potScaleVal,mx,potMx,
       </div>
     </Card>
 
-    {/* Stats per quadrant */}
     <Card title="Estadísticas por Cuadrante" icon="📊" style={{marginBottom:20}}>
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
         {[0,1,2].map(row=>[0,1,2].map(col=>{
@@ -418,21 +409,15 @@ const NineBoxView=({data,potData,config,potConfig,scaleVal,potScaleVal,mx,potMx,
           const pct=totalPeople>0?Math.round((cellUsers.length/totalPeople)*100):0;
           const avgDes=cellUsers.length?cellUsers.reduce((s,u)=>s+u.desScore,0)/cellUsers.length:0;
           const avgPot=cellUsers.length?cellUsers.reduce((s,u)=>s+u.potScore,0)/cellUsers.length:0;
-
           return(<div key={`s${row}-${col}`} style={{background:bg,borderRadius:10,padding:12}}>
             <div style={{fontSize:11,fontWeight:700,color:txtColor,marginBottom:6}}>{cellInfo.label}</div>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:20,fontWeight:800,color:txtColor,marginBottom:4}}>
-              {cellUsers.length}<span style={{fontSize:11,fontWeight:500,opacity:0.7}}>{pct}%</span>
-            </div>
-            <div style={{fontSize:10,color:txtColor,opacity:0.8,lineHeight:1.5}}>
-              Des: {fmt(avgDes)} · Pot: {fmt(avgPot)}
-            </div>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:20,fontWeight:800,color:txtColor,marginBottom:4}}>{cellUsers.length}<span style={{fontSize:11,fontWeight:500,opacity:0.7}}>{pct}%</span></div>
+            <div style={{fontSize:10,color:txtColor,opacity:0.8,lineHeight:1.5}}>Des: {fmt(avgDes)} · Pot: {fmt(avgPot)}</div>
           </div>);
         }))}
       </div>
     </Card>
 
-    {/* Selected cell detail */}
     {selectedCell&&(<Card title={`${NINE_BOX_LABELS.cells[selectedCell.row][selectedCell.col].label} — Detalle`} icon="👥" badge={`${grid[selectedCell.row][selectedCell.col].length} personas`} style={{marginBottom:20}}>
       <p style={{fontSize:12,color:C.textSec,margin:"0 0 14px"}}>{NINE_BOX_LABELS.cells[selectedCell.row][selectedCell.col].desc}</p>
       {grid[selectedCell.row][selectedCell.col].length===0?
@@ -449,16 +434,13 @@ const NineBoxView=({data,potData,config,potConfig,scaleVal,potScaleVal,mx,potMx,
               <td style={{padding:"10px 12px",fontWeight:600,color:C.text}}>{u.name}</td>
               <td style={{textAlign:"center",padding:"10px 12px",fontWeight:700,color:C.primary}}>{fmt(u.desScore)}</td>
               <td style={{textAlign:"center",padding:"10px 12px",fontWeight:700,color:C.accent}}>{fmt(u.potScore)}</td>
-              <td style={{textAlign:"center",padding:"10px 12px"}}>
-                <button onClick={()=>onSelectUser(u.username)} style={{padding:"4px 12px",borderRadius:6,border:`1px solid ${C.border}`,background:C.white,color:C.primary,fontSize:11,cursor:"pointer",fontFamily:font,fontWeight:600}}>Ver perfil</button>
-              </td>
+              <td style={{textAlign:"center",padding:"10px 12px"}}><button onClick={()=>onSelectUser(u.username)} style={{padding:"4px 12px",borderRadius:6,border:`1px solid ${C.border}`,background:C.white,color:C.primary,fontSize:11,cursor:"pointer",fontFamily:font,fontWeight:600}}>Ver perfil</button></td>
             </tr>
           ))}</tbody>
         </table></div>
       }
     </Card>)}
 
-    {/* Scatter plot */}
     <Card title="Distribución Potencial vs Desempeño" icon="📈" style={{marginBottom:20}}>
       <NineBoxScatter data={nineBoxData} max={mx} onSelectUser={onSelectUser}/>
     </Card>
@@ -470,49 +452,16 @@ const NineBoxScatter=({data,max,onSelectUser})=>{
   const pw=w-pad.left-pad.right,ph=h-pad.top-pad.bottom;
   const tt=useTooltip();
   const third=max/3;
-
   return(<div style={{display:"flex",justifyContent:"center"}}><tt.Tip/>
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{maxWidth:"100%",height:"auto"}}>
-      {/* Grid zones */}
-      {[0,1,2].map(row=>[0,1,2].map(col=>{
-        const x=pad.left+col*(pw/3);
-        const y=pad.top+(2-row)*(ph/3);
-        return<rect key={`z${row}${col}`} x={x} y={y} width={pw/3} height={ph/3} fill={NINE_BOX_LABELS.cellColors[2-row][col]} opacity="0.3"/>;
-      }))}
-
-      {/* Grid lines */}
-      {[1,2].map(i=><>
-        <line key={`gv${i}`} x1={pad.left+i*(pw/3)} y1={pad.top} x2={pad.left+i*(pw/3)} y2={pad.top+ph} stroke={C.border} strokeWidth="1" strokeDasharray="4,4"/>
-        <line key={`gh${i}`} x1={pad.left} y1={pad.top+i*(ph/3)} x2={pad.left+pw} y2={pad.top+i*(ph/3)} stroke={C.border} strokeWidth="1" strokeDasharray="4,4"/>
-      </>)}
-
-      {/* Axes */}
+      {[0,1,2].map(row=>[0,1,2].map(col=>{const x=pad.left+col*(pw/3);const y=pad.top+(2-row)*(ph/3);return<rect key={`z${row}${col}`} x={x} y={y} width={pw/3} height={ph/3} fill={NINE_BOX_LABELS.cellColors[2-row][col]} opacity="0.3"/>;})) }
+      {[1,2].map(i=><g key={i}><line x1={pad.left+i*(pw/3)} y1={pad.top} x2={pad.left+i*(pw/3)} y2={pad.top+ph} stroke={C.border} strokeWidth="1" strokeDasharray="4,4"/><line x1={pad.left} y1={pad.top+i*(ph/3)} x2={pad.left+pw} y2={pad.top+i*(ph/3)} stroke={C.border} strokeWidth="1" strokeDasharray="4,4"/></g>)}
       <line x1={pad.left} y1={pad.top+ph} x2={pad.left+pw} y2={pad.top+ph} stroke={C.border} strokeWidth="1.5"/>
       <line x1={pad.left} y1={pad.top} x2={pad.left} y2={pad.top+ph} stroke={C.border} strokeWidth="1.5"/>
-
-      {/* Axis labels */}
       <text x={pad.left+pw/2} y={h-8} textAnchor="middle" fontSize="12" fontWeight="700" fill={C.textSec} fontFamily={font}>DESEMPEÑO</text>
       <text x={14} y={pad.top+ph/2} textAnchor="middle" fontSize="12" fontWeight="700" fill={C.textSec} fontFamily={font} transform={`rotate(-90,14,${pad.top+ph/2})`}>POTENCIAL</text>
-
-      {/* Tick labels */}
-      {[0,third,third*2,max].map((v,i)=>(
-        <g key={`tick${i}`}>
-          <text x={pad.left+(v/max)*pw} y={pad.top+ph+18} textAnchor="middle" fontSize="10" fill={C.textLight} fontFamily={font}>{fmt(v)}</text>
-          <text x={pad.left-8} y={pad.top+ph-(v/max)*ph+4} textAnchor="end" fontSize="10" fill={C.textLight} fontFamily={font}>{fmt(v)}</text>
-        </g>
-      ))}
-
-      {/* Data points */}
-      {data.map((u,i)=>{
-        const x=pad.left+(u.desScore/max)*pw;
-        const y=pad.top+ph-(u.potScore/max)*ph;
-        return<circle key={i} cx={x} cy={y} r="6" fill={C.primary} stroke={C.white} strokeWidth="2"
-          style={{cursor:"pointer",transition:"r 0.15s"}}
-          onMouseEnter={e=>{e.currentTarget.setAttribute("r","9");tt.show(e,`${u.name}\nDesempeño: ${fmt(u.desScore)}\nPotencial: ${fmt(u.potScore)}`);}}
-          onMouseLeave={e=>{e.currentTarget.setAttribute("r","6");tt.hide();}}
-          onClick={()=>onSelectUser(u.username)}
-        />;
-      })}
+      {[0,third,third*2,max].map((v,i)=>(<g key={`tick${i}`}><text x={pad.left+(v/max)*pw} y={pad.top+ph+18} textAnchor="middle" fontSize="10" fill={C.textLight} fontFamily={font}>{fmt(v)}</text><text x={pad.left-8} y={pad.top+ph-(v/max)*ph+4} textAnchor="end" fontSize="10" fill={C.textLight} fontFamily={font}>{fmt(v)}</text></g>))}
+      {data.map((u,i)=>{const x=pad.left+(u.desScore/max)*pw;const y=pad.top+ph-(u.potScore/max)*ph;return<circle key={i} cx={x} cy={y} r="6" fill={C.primary} stroke={C.white} strokeWidth="2" style={{cursor:"pointer",transition:"r 0.15s"}} onMouseEnter={e=>{e.currentTarget.setAttribute("r","9");tt.show(e,`${u.name}\nDesempeño: ${fmt(u.desScore)}\nPotencial: ${fmt(u.potScore)}`);}} onMouseLeave={e=>{e.currentTarget.setAttribute("r","6");tt.hide();}} onClick={()=>onSelectUser(u.username)}/>;} )}
     </svg>
   </div>);
 };
@@ -540,7 +489,7 @@ const dimAvgs=useMemo(()=>{const d={};data.comp.forEach(r=>{const k=r[COL.dimens
 const dirAvgs=useMemo(()=>{const d={};data.dir.forEach(r=>{const k=r[COL.direccion],p=parseFloat(r[COL.puntaje]);if(k?.trim()&&!isNaN(p)){if(!d[k])d[k]=[];d[k].push(p);}});return Object.entries(d).map(([name,vals])=>({name,avg:vals.reduce((a,b)=>a+b,0)/vals.length,weight:dirWeights[name]||0}));},[data,dirWeights]);
 const cycleAvgs=useMemo(()=>{const c={};data.total.forEach(r=>{const cyc=r[COL.ciclo];if(cyc?.trim()&&!c[cyc])c[cyc]={users:new Set(),dims:{},dirs:{}};if(cyc?.trim()){const u=r[COL.username]||r[COL.nombre];if(u)c[cyc].users.add(u);}});data.comp.forEach(r=>{const cyc=r[COL.ciclo],dim=r[COL.dimension],p=parseFloat(r[COL.puntaje]);if(cyc?.trim()&&dim?.trim()&&!isNaN(p)&&c[cyc]){if(!c[cyc].dims[dim])c[cyc].dims[dim]=[];c[cyc].dims[dim].push(p);}});data.dir.forEach(r=>{const cyc=r[COL.ciclo],dir=r[COL.direccion],p=parseFloat(r[COL.puntaje]);if(cyc?.trim()&&dir?.trim()&&!isNaN(p)&&c[cyc]){if(!c[cyc].dirs[dir])c[cyc].dirs[dir]=[];c[cyc].dirs[dir].push(p);}});return Object.entries(c).map(([name,d])=>{const dirList=Object.entries(d.dirs).map(([n,v])=>({name:n,avg:v.reduce((a,b)=>a+b,0)/v.length,weight:dirWeights[n]||0}));const wDirs=dirList.filter(x=>x.weight>0);const tw=wDirs.reduce((s,x)=>s+x.weight,0);const avg=tw>0?wDirs.reduce((s,x)=>s+scaleVal(x.avg)*x.weight,0)/tw:0;return{name,count:d.users.size,avg,dims:Object.entries(d.dims).map(([n,v])=>({name:n,avg:v.reduce((a,b)=>a+b,0)/v.length})),dirs:dirList};});},[data,dirWeights,scaleVal]);
 const[expandedCycle,setExpandedCycle]=useState(null);
-const distribution=useMemo(()=>{const buckets=[{label:"0-20",min:0,max:20,names:[],color:C.scale[1]},{label:"21-40",min:21,max:40,names:[],color:C.scale[3]},{label:"41-60",min:41,max:60,names:[],color:C.scale[5]},{label:"61-80",min:61,max:80,names:[],color:C.scale[7]},{label:"81-100",min:81,max:100,names:[],color:C.scale[9]}];userScores.forEach(u=>{const b=buckets.find(b=>u.score>=b.min&&u.score<=b.max);if(b)b.names.push(u.name||"?");});return buckets;},[userScores]);
+const distribution=useMemo(()=>{const step=mx/5;const buckets=Array.from({length:5},(_,i)=>({label:`${fmt(i*step)}-${fmt((i+1)*step)}`,min:i*step,max:(i+1)*step,names:[],color:C.scale[i*2+1]}));userScores.forEach(u=>{const b=buckets.find(b=>u.score>=b.min&&u.score<=b.max);if(b)b.names.push(u.name||"?");});return buckets;},[userScores,mx]);
 return(<div style={{maxWidth:960,margin:"0 auto",padding:24}}><tt.Tip/>
   <h2 style={{fontSize:20,fontWeight:700,color:C.text,margin:"0 0 20px",letterSpacing:"-0.02em"}}>Resumen General</h2>
   <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:20}}>
@@ -580,7 +529,6 @@ const[mapping,setMapping]=useState({});
 const[dirWeights,setDirWeights]=useState({});
 const[scoreLabels,setScoreLabels]=useState(DEFAULT_LABELS);
 const[showSettings,setShowSettings]=useState(false);
-// 9-Box state
 const[potData,setPotData]=useState(null);
 const[potConfig,setPotConfig]=useState(null);
 const[potMapping,setPotMapping]=useState({});
@@ -590,37 +538,29 @@ const[potWarning,setPotWarning]=useState(null);
 const tt=useTooltip();
 
 const loadData=async()=>{setLoading(true);setError(null);try{
-  // Load main sheet
   const results=await Promise.allSettled([fetchSheet(sheetId,SHEET_NAMES.inputs),fetchSheet(sheetId,SHEET_NAMES.total),fetchSheet(sheetId,SHEET_NAMES.competencia),fetchSheet(sheetId,SHEET_NAMES.direccion),fetchSheet(sheetId,SHEET_NAMES.dirCompetencia),fetchSheet(sheetId,SHEET_NAMES.respuestas),fetchSheet(sheetId,SHEET_NAMES.comentarios)]);
   const[iR,tR,cR,dR,dcR,rR,comR]=results;
   if(tR.status==="rejected")throw new Error("Error al cargar datos principales");
-  const cfg=iR.status==="fulfilled"?parseInputs(iR.value):{scaleMin:0,scaleMax:100,origMin:1,origMax:5};
+  const cfg=iR.status==="fulfilled"?parseInputs(iR.value):{scaleMin:1,scaleMax:5,origMin:1,origMax:5};
   setConfig(cfg);setMapping(generateMapping(cfg.origMin,cfg.origMax,cfg.scaleMax,"proportional"));
   const dirData=dR.status==="fulfilled"?dR.value:[];setDirWeights(detectDirections(dirData));
   setData({total:tR.value,comp:cR.status==="fulfilled"?cR.value:[],dir:dirData,dirComp:dcR.status==="fulfilled"?dcR.value:[],resp:rR.status==="fulfilled"?rR.value:[],comments:comR.status==="fulfilled"?comR.value:[]});
 
-  // Load potencial sheet if provided
   if(potSheetId.trim()){
     try{
       const potResults=await Promise.allSettled([fetchSheet(potSheetId,SHEET_NAMES.inputs),fetchSheet(potSheetId,SHEET_NAMES.total),fetchSheet(potSheetId,SHEET_NAMES.competencia),fetchSheet(potSheetId,SHEET_NAMES.direccion),fetchSheet(potSheetId,SHEET_NAMES.dirCompetencia),fetchSheet(potSheetId,SHEET_NAMES.respuestas)]);
       const[piR,ptR,pcR,pdR,pdcR,prR]=potResults;
-      if(ptR.status==="rejected"){setPotWarning("No se pudo cargar la pestaña 'Total por colaborador' del Sheet de Potencial. Verificá que existe y el sheet es público.");setPotData(null);setPotConfig(null);}
+      if(ptR.status==="rejected"){setPotWarning("No se pudo cargar la pestaña 'Total por colaborador' del Sheet de Potencial.");setPotData(null);setPotConfig(null);}
       else if(!ptR.value||ptR.value.length===0){setPotWarning("La pestaña 'Total por colaborador' del Sheet de Potencial está vacía.");setPotData(null);setPotConfig(null);}
       else{
-        const pCfg=piR.status==="fulfilled"?parseInputs(piR.value):{scaleMin:0,scaleMax:100,origMin:1,origMax:5};
+        const pCfg=piR.status==="fulfilled"?parseInputs(piR.value):{scaleMin:1,scaleMax:5,origMin:1,origMax:5};
         setPotConfig(pCfg);setPotMapping(generateMapping(pCfg.origMin,pCfg.origMax,pCfg.scaleMax,"proportional"));
         const potDirData=pdR.status==="fulfilled"?pdR.value:[];setPotDirWeights(detectDirections(potDirData));
         setPotData({total:ptR.value,comp:pcR.status==="fulfilled"?pcR.value:[],dir:potDirData,dirComp:pdcR.status==="fulfilled"?pdcR.value:[],resp:prR.status==="fulfilled"?prR.value:[]});
         setPotWarning(null);
       }
-    }catch(pe){
-      console.error("Error cargando potencial:",pe);
-      setPotWarning("Error al conectar con el Sheet de Potencial: "+pe.message);
-      setPotData(null);setPotConfig(null);
-    }
-  }else{
-    setPotData(null);setPotConfig(null);setPotWarning(null);
-  }
+    }catch(pe){setPotWarning("Error al conectar con el Sheet de Potencial: "+pe.message);setPotData(null);setPotConfig(null);}
+  }else{setPotData(null);setPotConfig(null);setPotWarning(null);}
 
   setConnected(true);setView("overview");setSelectedUser(null);
 }catch(e){console.error(e);setError("No pude conectar. Verificá que el Sheet sea público y las pestañas correctas.");}setLoading(false);};
@@ -628,32 +568,25 @@ const loadData=async()=>{setLoading(true);setError(null);try{
 const scaleVal=useCallback((val)=>{if(!config)return parseFloat(val)||0;return remapScale(val,config,mapping);},[config,mapping]);
 const scaleResp=useCallback((val)=>{if(!config)return parseFloat(val)||0;return remapResp(val,config,mapping);},[config,mapping]);
 const potScaleVal=useCallback((val)=>{if(!potConfig)return parseFloat(val)||0;return remapScale(val,potConfig,potMapping);},[potConfig,potMapping]);
-const mx=config?config.scaleMax:100;
-const potMx=potConfig?potConfig.scaleMax:100;
+const mx=config?config.scaleMax:5;
+const potMx=potConfig?potConfig.scaleMax:5;
 const users=useMemo(()=>{if(!data)return[];const seen=new Set();return data.total.filter(r=>{const u=r[COL.username]||r[COL.nombre];if(!u||!u.trim()||seen.has(u))return false;seen.add(u);return true;}).map(r=>({username:r[COL.username]||r[COL.nombre],name:r[COL.nombre]||r[COL.username]})).sort((a,b)=>(a.name||"").localeCompare(b.name||""));},[data]);
 const handleSelectUser=(u)=>{setSelectedUser(u);setView("individual");};
 const userData=useMemo(()=>data&&selectedUser?buildUserData(data,selectedUser):null,[data,selectedUser]);
 const weightedTotal=useMemo(()=>userData?computeWeightedTotal(userData,scaleVal,dirWeights):0,[userData,scaleVal,dirWeights]);
 
-// Potencial score for selected user (for individual view enrichment)
 const potUserData=useMemo(()=>{
   if(!potData||!selectedUser)return null;
   const selNorm=norm(selectedUser);
   const selName=users.find(u=>u.username===selectedUser)?.name||"";
   const selNameNorm=selName?norm(selName):"";
-  // Try to find the user in potencial data: exact then normalized
-  const potRow=potData.total.find(r=>{
-    const u=(r[COL.username]||"").trim();
-    const n=(r[COL.nombre]||"").trim();
-    return u===selectedUser||n===selectedUser||n===selName||(selNorm&&norm(u)===selNorm)||(selNameNorm&&norm(n)===selNameNorm);
-  });
+  const potRow=potData.total.find(r=>{const u=(r[COL.username]||"").trim();const n=(r[COL.nombre]||"").trim();return u===selectedUser||n===selectedUser||n===selName||(selNorm&&norm(u)===selNorm)||(selNameNorm&&norm(n)===selNameNorm);});
   if(!potRow)return null;
   const potUd=buildUserData(potData,potRow[COL.username]||potRow[COL.nombre]);
   if(!potUd)return null;
   return{ud:potUd,score:computeWeightedTotal(potUd,potScaleVal,potDirWeights)};
 },[potData,selectedUser,users,potScaleVal,potDirWeights]);
 
-// 9-Box position for individual view (must be before early returns)
 const nineBoxPosition=useMemo(()=>{
   if(!potUserData)return null;
   const cell=getNineBoxCell(weightedTotal,potUserData.score,mx);
@@ -662,8 +595,12 @@ const nineBoxPosition=useMemo(()=>{
 
 const[exportProgress,setExportProgress]=useState("");
 
+/* ─── handleChangeConfig: actualiza config y regenera mapping ─── */
+const handleChangeConfig=useCallback((newCfg)=>{
+  setConfig(prev=>({...prev,...newCfg}));
+  setMapping(generateMapping(newCfg.origMin,newCfg.origMax,newCfg.scaleMax,"proportional"));
+},[]);
 
-/* ─── Native PDF generation with jsPDF ─── */
 const generatePDF=(ud,cfg,mp,dw,weightedScore,labels)=>{
   const sv=(val)=>remapScale(val,cfg,mp);
   const sr=(val)=>remapResp(val,cfg,mp);
@@ -681,56 +618,20 @@ const generatePDF=(ud,cfg,mp,dw,weightedScore,labels)=>{
   const truncText=(text,maxW)=>{let t=text||"";while(pdf.getTextWidth(t)>maxW&&t.length>3){t=t.slice(0,-1);}return t===text?text:t+"...";};
   const diffStr=(val)=>{const n=parseFloat(val);if(isNaN(n))return"";const abs=fmt(Math.abs(n));return n>=0?"+"+abs:"-"+abs;};
 
-  // Draw a filled polygon from array of [x,y] points
-  const fillPoly=(pts,fillHex)=>{
-    if(pts.length<3)return;
-    setF(fillHex);
-    pdf.triangle(pts[0][0],pts[0][1],pts[1][0],pts[1][1],pts[2][0],pts[2][1],"F");
-    for(let i=2;i<pts.length-1;i++){
-      pdf.triangle(pts[0][0],pts[0][1],pts[i][0],pts[i][1],pts[i+1][0],pts[i+1][1],"F");
-    }
-  };
+  const fillPoly=(pts,fillHex)=>{if(pts.length<3)return;setF(fillHex);pdf.triangle(pts[0][0],pts[0][1],pts[1][0],pts[1][1],pts[2][0],pts[2][1],"F");for(let i=2;i<pts.length-1;i++){pdf.triangle(pts[0][0],pts[0][1],pts[i][0],pts[i][1],pts[i+1][0],pts[i+1][1],"F");}};
 
-  // Draw ring chart for a set of segments
-  const drawRing=(cx,cy,size,segments)=>{
-    const n=segments.length;if(!n)return;
-    const ringW=size/(n*2+2);
-    segments.forEach((seg,i)=>{
-      const outerR=(size/2)-(i*ringW)-1;
-      const pct=Math.min(seg.value/mx,1);
-      // Background circle
-      setD("#F1F5F9");pdf.setLineWidth(ringW-1);
-      pdf.circle(cx,cy,outerR,"S");
-      // Filled arc — approximate with line segments
-      if(pct>0.01){
-        setD(cats8[i%8]);pdf.setLineWidth(ringW-1);
-        const steps=Math.max(Math.floor(pct*24),2);
-        for(let s=0;s<steps;s++){
-          const a1=-Math.PI/2+(s/steps)*pct*2*Math.PI;
-          const a2=-Math.PI/2+((s+1)/steps)*pct*2*Math.PI;
-          pdf.line(cx+outerR*Math.cos(a1),cy+outerR*Math.sin(a1),cx+outerR*Math.cos(a2),cy+outerR*Math.sin(a2));
-        }
-      }
-    });
-    pdf.setLineWidth(0.3);
-  };
+  const drawRing=(cx,cy,size,segments)=>{const n=segments.length;if(!n)return;const ringW=size/(n*2+2);segments.forEach((seg,i)=>{const outerR=(size/2)-(i*ringW)-1;const pct=Math.min(seg.value/mx,1);setD("#F1F5F9");pdf.setLineWidth(ringW-1);pdf.circle(cx,cy,outerR,"S");if(pct>0.01){setD(cats8[i%8]);pdf.setLineWidth(ringW-1);const steps=Math.max(Math.floor(pct*24),2);for(let s=0;s<steps;s++){const a1=-Math.PI/2+(s/steps)*pct*2*Math.PI;const a2=-Math.PI/2+((s+1)/steps)*pct*2*Math.PI;pdf.line(cx+outerR*Math.cos(a1),cy+outerR*Math.sin(a1),cx+outerR*Math.cos(a2),cy+outerR*Math.sin(a2));}}});pdf.setLineWidth(0.3);};
 
-  // ── Hero card ──
   const heroH=36;
   setF("#3B5FE5");pdf.roundedRect(M,y,CW,heroH,3,3,"F");
-  pdf.setFont("helvetica","normal");pdf.setFontSize(9);
-  pdf.setTextColor(255,255,255);pdf.text("Evaluado",M+6,y+8);
-  pdf.setFont("helvetica","bold");pdf.setFontSize(16);
-  pdf.text(ud.name||"",M+6,y+17);
+  pdf.setFont("helvetica","normal");pdf.setFontSize(9);pdf.setTextColor(255,255,255);pdf.text("Evaluado",M+6,y+8);
+  pdf.setFont("helvetica","bold");pdf.setFontSize(16);pdf.text(ud.name||"",M+6,y+17);
   if(ud.ciclo){pdf.setFont("helvetica","normal");pdf.setFontSize(8);pdf.text(ud.ciclo,M+6,y+23);}
-  pdf.setFont("helvetica","normal");pdf.setFontSize(9);
-  pdf.text("Puntaje Ponderado",M+CW-6,y+8,{align:"right"});
-  pdf.setFont("helvetica","bold");pdf.setFontSize(26);
-  pdf.text(fmt(weightedScore),M+CW-6,y+22,{align:"right"});
+  pdf.setFont("helvetica","normal");pdf.setFontSize(9);pdf.text("Puntaje Ponderado",M+CW-6,y+8,{align:"right"});
+  pdf.setFont("helvetica","bold");pdf.setFontSize(26);pdf.text(fmt(weightedScore),M+CW-6,y+22,{align:"right"});
   if(lbl){pdf.setFontSize(9);pdf.setFont("helvetica","normal");pdf.text(lbl.label,M+CW-6,y+30,{align:"right"});}
   y+=heroH+8;
 
-  // ── Radar chart ──
   checkPage(70);
   pdf.setFont("helvetica","bold");pdf.setFontSize(11);setC("#1E293B");
   pdf.text("Competencias",M,y+4);y+=8;
@@ -739,48 +640,21 @@ const generatePDF=(ud,cfg,mp,dw,weightedScore,labels)=>{
   const rn=compData.length;
   if(rn>0){
     const as=(2*Math.PI)/rn;
-    // Grid
-    for(let l=1;l<=5;l++){const lv=l/5;setD("#E2E8F0");pdf.setLineWidth(0.2);
-      const pts=[];for(let i=0;i<rn;i++){pts.push([radarCx+radarR*lv*Math.cos(as*i-Math.PI/2),radarCy+radarR*lv*Math.sin(as*i-Math.PI/2)]);}
-      pts.forEach((p,i)=>{const np=pts[(i+1)%rn];pdf.line(p[0],p[1],np[0],np[1]);});
-    }
+    for(let l=1;l<=5;l++){const lv=l/5;setD("#E2E8F0");pdf.setLineWidth(0.2);const pts=[];for(let i=0;i<rn;i++){pts.push([radarCx+radarR*lv*Math.cos(as*i-Math.PI/2),radarCy+radarR*lv*Math.sin(as*i-Math.PI/2)]);}pts.forEach((p,i)=>{const np=pts[(i+1)%rn];pdf.line(p[0],p[1],np[0],np[1]);});}
     for(let i=0;i<rn;i++){pdf.line(radarCx,radarCy,radarCx+radarR*Math.cos(as*i-Math.PI/2),radarCy+radarR*Math.sin(as*i-Math.PI/2));}
-    // Data polygon with fill
     const dataPts=compData.map((d,i)=>[radarCx+radarR*(d.value/mx)*Math.cos(as*i-Math.PI/2),radarCy+radarR*(d.value/mx)*Math.sin(as*i-Math.PI/2)]);
     fillPoly(dataPts,"#DBEAFE");
-    setD("#3B82F6");pdf.setLineWidth(0.5);
-    dataPts.forEach((p,i)=>{const np=dataPts[(i+1)%rn];pdf.line(p[0],p[1],np[0],np[1]);});
-    // Dots + labels
-    compData.forEach((d,i)=>{
-      const dx=dataPts[i][0],dy=dataPts[i][1];
-      setF("#3B82F6");pdf.circle(dx,dy,1,"F");
-      const lx=radarCx+(radarR+10)*Math.cos(as*i-Math.PI/2);
-      const ly=radarCy+(radarR+10)*Math.sin(as*i-Math.PI/2);
-      pdf.setFontSize(6);setC("#64748B");pdf.setFont("helvetica","normal");
-      pdf.text(d.label.length>20?d.label.substring(0,20)+"...":d.label,lx,ly,{align:"center"});
-    });
+    setD("#3B82F6");pdf.setLineWidth(0.5);dataPts.forEach((p,i)=>{const np=dataPts[(i+1)%rn];pdf.line(p[0],p[1],np[0],np[1]);});
+    compData.forEach((d,i)=>{const dx=dataPts[i][0],dy=dataPts[i][1];setF("#3B82F6");pdf.circle(dx,dy,1,"F");const lx=radarCx+(radarR+10)*Math.cos(as*i-Math.PI/2);const ly=radarCy+(radarR+10)*Math.sin(as*i-Math.PI/2);pdf.setFontSize(6);setC("#64748B");pdf.setFont("helvetica","normal");pdf.text(d.label.length>20?d.label.substring(0,20)+"...":d.label,lx,ly,{align:"center"});});
   }
 
-  // ── Direction bars (right side) ──
-  const barX=M+CW*0.55,barW=CW*0.42;
-  let barY=y;
-  pdf.setFont("helvetica","bold");pdf.setFontSize(11);setC("#1E293B");
-  pdf.text("Valoracion General",barX,barY+4);barY+=10;
-  ud.direcciones.forEach((d)=>{
-    const w=dw[d.name]||0;const scaled=sv(d.score);const pct=Math.min(scaled/mx,1);
-    pdf.setFontSize(7);setC(w===0?"#94A3B8":"#1E293B");pdf.setFont("helvetica","normal");
-    pdf.text(truncText(d.name,barW*0.6),barX,barY+3);
-    pdf.setFont("helvetica","bold");pdf.text(fmt(scaled),barX+barW,barY+3,{align:"right"});
-    setF("#F1F5F9");pdf.roundedRect(barX,barY+4.5,barW,3,1,1,"F");
-    if(pct>0){setF("#3575D5");pdf.roundedRect(barX,barY+4.5,barW*pct,3,1,1,"F");}
-    barY+=11;
-  });
+  const barX=M+CW*0.55,barW=CW*0.42;let barY=y;
+  pdf.setFont("helvetica","bold");pdf.setFontSize(11);setC("#1E293B");pdf.text("Valoracion General",barX,barY+4);barY+=10;
+  ud.direcciones.forEach((d)=>{const w=dw[d.name]||0;const scaled=sv(d.score);const pct=Math.min(scaled/mx,1);pdf.setFontSize(7);setC(w===0?"#94A3B8":"#1E293B");pdf.setFont("helvetica","normal");pdf.text(truncText(d.name,barW*0.6),barX,barY+3);pdf.setFont("helvetica","bold");pdf.text(fmt(scaled),barX+barW,barY+3,{align:"right"});setF("#F1F5F9");pdf.roundedRect(barX,barY+4.5,barW,3,1,1,"F");if(pct>0){setF("#3575D5");pdf.roundedRect(barX,barY+4.5,barW*pct,3,1,1,"F");}barY+=11;});
   y=Math.max(y+65,barY+4);
 
-  // ── Detalle por Competencia ──
   checkPage(20);
-  pdf.setFont("helvetica","bold");pdf.setFontSize(11);setC("#1E293B");
-  pdf.text("Detalle por Competencia",M,y+4);y+=10;
+  pdf.setFont("helvetica","bold");pdf.setFontSize(11);setC("#1E293B");pdf.text("Detalle por Competencia",M,y+4);y+=10;
   ud.competencias.forEach((comp)=>{
     const wc=computeWeightedComp(comp.name,ud.compDetail,(v)=>remapScale(v,cfg,mp),dw);
     const compScore=wc!=null?wc:sv(comp.score);
@@ -788,136 +662,59 @@ const generatePDF=(ud,cfg,mp,dw,weightedScore,labels)=>{
     const cardH=14+details.length*9;
     checkPage(cardH+4);
     setD("#E2E8F0");pdf.setLineWidth(0.3);pdf.roundedRect(M,y,CW,cardH,2,2,"S");
-    pdf.setFont("helvetica","bold");pdf.setFontSize(9);setC("#1E293B");
-    pdf.text(truncText(comp.name,CW*0.55),M+4,y+6);
+    pdf.setFont("helvetica","bold");pdf.setFontSize(9);setC("#1E293B");pdf.text(truncText(comp.name,CW*0.55),M+4,y+6);
     pdf.setFontSize(14);setC("#1D4ED8");pdf.text(fmt(compScore),M+CW-4,y+7,{align:"right"});
-    const dif=comp.dif;const difPos=dif>=0;
-    pdf.setFontSize(7);setC(difPos?"#059669":"#DC2626");
-    pdf.text(diffStr(dif),M+CW-20,y+7,{align:"right"});
+    const dif=comp.dif;const difPos=dif>=0;pdf.setFontSize(7);setC(difPos?"#059669":"#DC2626");pdf.text(diffStr(dif),M+CW-20,y+7,{align:"right"});
     let dy=y+12;
-    details.forEach(([dir,val])=>{
-      const w=dw[dir]||0;const scaled=sv(val);const pct=Math.min(scaled/mx,1);
-      pdf.setFontSize(6.5);setC(w===0?"#94A3B8":"#64748B");pdf.setFont("helvetica","normal");
-      pdf.text(truncText(dir,CW*0.4),M+4,dy+2.5);
-      pdf.setFont("helvetica","bold");pdf.text(fmt(scaled),M+CW*0.5,dy+2.5,{align:"right"});
-      const bx=M+CW*0.52,bw=CW*0.42;
-      setF("#F1F5F9");pdf.roundedRect(bx,dy,bw,2.5,0.8,0.8,"F");
-      if(pct>0){setF("#3575D5");pdf.roundedRect(bx,dy,bw*pct,2.5,0.8,0.8,"F");}
-      dy+=9;
-    });
+    details.forEach(([dir,val])=>{const w=dw[dir]||0;const scaled=sv(val);const pct=Math.min(scaled/mx,1);pdf.setFontSize(6.5);setC(w===0?"#94A3B8":"#64748B");pdf.setFont("helvetica","normal");pdf.text(truncText(dir,CW*0.4),M+4,dy+2.5);pdf.setFont("helvetica","bold");pdf.text(fmt(scaled),M+CW*0.5,dy+2.5,{align:"right"});const bx=M+CW*0.52,bw=CW*0.42;setF("#F1F5F9");pdf.roundedRect(bx,dy,bw,2.5,0.8,0.8,"F");if(pct>0){setF("#3575D5");pdf.roundedRect(bx,dy,bw*pct,2.5,0.8,0.8,"F");}dy+=9;});
     y+=cardH+4;
   });
 
-  // ── Preguntas ──
   const questionsArr=Object.entries(ud.questions||{});
   if(questionsArr.length>0){
-    checkPage(16);
-    pdf.setFont("helvetica","bold");pdf.setFontSize(11);setC("#1E293B");
-    pdf.text("Preguntas",M,y+4);y+=10;
+    checkPage(16);pdf.setFont("helvetica","bold");pdf.setFontSize(11);setC("#1E293B");pdf.text("Preguntas",M,y+4);y+=10;
     questionsArr.forEach(([qName,qData])=>{
       const segs=Object.entries(qData.dirs).map(([dir,val])=>({label:dir,value:sr(val)}));
       const qComments=(ud.comments||{})[qName]||[];
-      const cardH=Math.max(12+segs.length*7, 20);
+      const cardH=Math.max(12+segs.length*7,20);
       checkPage(cardH+4);
       setD("#E2E8F0");pdf.setLineWidth(0.3);pdf.roundedRect(M,y,CW,cardH,2,2,"S");
-      pdf.setFont("helvetica","bold");pdf.setFontSize(8);setC("#1E293B");
-      pdf.text(truncText(qName,CW*0.75),M+4,y+5.5);
+      pdf.setFont("helvetica","bold");pdf.setFontSize(8);setC("#1E293B");pdf.text(truncText(qName,CW*0.75),M+4,y+5.5);
       if(qData.dim){pdf.setFont("helvetica","normal");pdf.setFontSize(6);setC("#94A3B8");pdf.text(qData.dim,M+4,y+9.5);}
       let qy=y+(qData.dim?13:9);
-      segs.forEach((seg,j)=>{
-        setF(cats8[j%8]);pdf.circle(M+6,qy+1,1,"F");
-        pdf.setFontSize(7);setC("#1E293B");pdf.setFont("helvetica","normal");
-        pdf.text(seg.label,M+9,qy+2);
-        pdf.setFont("helvetica","bold");pdf.text(fmt(seg.value),M+CW-20,qy+2,{align:"right"});
-        qy+=7;
-      });
-      if(segs.length>=1){
-        const ringSize=Math.min(cardH-4, 16);
-        drawRing(M+CW-10, y+cardH/2, ringSize, segs);
-      }
+      segs.forEach((seg,j)=>{setF(cats8[j%8]);pdf.circle(M+6,qy+1,1,"F");pdf.setFontSize(7);setC("#1E293B");pdf.setFont("helvetica","normal");pdf.text(seg.label,M+9,qy+2);pdf.setFont("helvetica","bold");pdf.text(fmt(seg.value),M+CW-20,qy+2,{align:"right"});qy+=7;});
+      if(segs.length>=1){const ringSize=Math.min(cardH-4,16);drawRing(M+CW-10,y+cardH/2,ringSize,segs);}
       y+=cardH+4;
-      // Comments for this question
-      if(qComments.length>0){
-        qComments.forEach((c,ci)=>{
-          const lines=pdf.splitTextToSize(c.comment,CW-16);
-          const cH=6+lines.length*4;
-          checkPage(cH+2);
-          setF("#F1F5F9");pdf.roundedRect(M+2,y,CW-4,cH,1.5,1.5,"F");
-          pdf.setFontSize(6);pdf.setFont("helvetica","bold");setC("#64748B");
-          pdf.text(c.dir,M+6,y+4);
-          pdf.setFontSize(6.5);setC("#1E293B");pdf.setFont("helvetica","italic");
-          pdf.text(lines,M+6,y+8);
-          y+=cH+2;
-        });
-        y+=2;
-      }
+      if(qComments.length>0){qComments.forEach((c)=>{const lines=pdf.splitTextToSize(c.comment,CW-16);const cH=6+lines.length*4;checkPage(cH+2);setF("#F1F5F9");pdf.roundedRect(M+2,y,CW-4,cH,1.5,1.5,"F");pdf.setFontSize(6);pdf.setFont("helvetica","bold");setC("#64748B");pdf.text(c.dir,M+6,y+4);pdf.setFontSize(6.5);setC("#1E293B");pdf.setFont("helvetica","italic");pdf.text(lines,M+6,y+8);y+=cH+2;});y+=2;}
     });
   }
 
-  // ── Tabla comparativa ──
-  checkPage(20);
-  pdf.setFont("helvetica","bold");pdf.setFontSize(11);setC("#1E293B");
-  pdf.text("Resumen Comparativo",M,y+4);y+=8;
-  const colCount=3+ud.direcciones.length;
-  const colW0=CW*0.28;
-  const colWn=(CW-colW0)/(colCount-1);
-  const rowH=6;
-  checkPage(rowH+4);
-  setF("#F8FAFC");pdf.rect(M,y,CW,rowH,"F");
-  pdf.setFontSize(5.5);pdf.setFont("helvetica","bold");setC("#64748B");
-  let cx=M+2;
-  pdf.text("Competencia",cx,y+4);cx=M+colW0;
-  pdf.text("Puntaje",cx+colWn*0.5,y+4,{align:"center"});cx+=colWn;
-  pdf.text("vs Prom.",cx+colWn*0.5,y+4,{align:"center"});cx+=colWn;
-  ud.direcciones.forEach(d=>{
-    const w=dw[d.name]||0;
-    pdf.setTextColor(...hexToRgb(w===0?"#94A3B8":"#64748B"));
-    pdf.text(truncText(d.name,colWn-2),cx+colWn*0.5,y+4,{align:"center"});cx+=colWn;
-  });
-  setD("#E2E8F0");pdf.setLineWidth(0.3);pdf.line(M,y+rowH,M+CW,y+rowH);
-  y+=rowH;
+  checkPage(20);pdf.setFont("helvetica","bold");pdf.setFontSize(11);setC("#1E293B");pdf.text("Resumen Comparativo",M,y+4);y+=8;
+  const colCount=3+ud.direcciones.length;const colW0=CW*0.28;const colWn=(CW-colW0)/(colCount-1);const rowH=6;
+  checkPage(rowH+4);setF("#F8FAFC");pdf.rect(M,y,CW,rowH,"F");pdf.setFontSize(5.5);pdf.setFont("helvetica","bold");setC("#64748B");
+  let cx2=M+2;pdf.text("Competencia",cx2,y+4);cx2=M+colW0;pdf.text("Puntaje",cx2+colWn*0.5,y+4,{align:"center"});cx2+=colWn;pdf.text("vs Prom.",cx2+colWn*0.5,y+4,{align:"center"});cx2+=colWn;
+  ud.direcciones.forEach(d=>{const w=dw[d.name]||0;pdf.setTextColor(...hexToRgb(w===0?"#94A3B8":"#64748B"));pdf.text(truncText(d.name,colWn-2),cx2+colWn*0.5,y+4,{align:"center"});cx2+=colWn;});
+  setD("#E2E8F0");pdf.setLineWidth(0.3);pdf.line(M,y+rowH,M+CW,y+rowH);y+=rowH;
   ud.competencias.forEach((comp,i)=>{
-    checkPage(rowH+2);
-    if(i%2===1){setF("#F8FAFC");pdf.rect(M,y,CW,rowH,"F");}
-    const wc=computeWeightedComp(comp.name,ud.compDetail,(v)=>remapScale(v,cfg,mp),dw);
-    const compScoreStr=wc!=null?fmt(wc):fmt(sv(comp.score));
-    pdf.setFontSize(5.5);cx=M+2;
-    pdf.setFont("helvetica","bold");setC("#1E293B");
-    pdf.text(truncText(comp.name,colW0-4),cx,y+4);
-    cx=M+colW0;setC("#1D4ED8");pdf.text(compScoreStr,cx+colWn*0.5,y+4,{align:"center"});cx+=colWn;
-    const dif=comp.dif;setC(dif>=0?"#059669":"#DC2626");pdf.setFont("helvetica","normal");
-    pdf.text(diffStr(dif),cx+colWn*0.5,y+4,{align:"center"});cx+=colWn;
-    ud.direcciones.forEach(d=>{
-      const w=dw[d.name]||0;setC(w===0?"#94A3B8":"#1E293B");
-      const val=ud.compDetail[comp.name]?.[d.name];
-      pdf.text(val?fmt(sv(val)):"-",cx+colWn*0.5,y+4,{align:"center"});cx+=colWn;
-    });
-    setD("#F1F5F9");pdf.line(M,y+rowH,M+CW,y+rowH);
-    y+=rowH;
+    checkPage(rowH+2);if(i%2===1){setF("#F8FAFC");pdf.rect(M,y,CW,rowH,"F");}
+    const wc=computeWeightedComp(comp.name,ud.compDetail,(v)=>remapScale(v,cfg,mp),dw);const compScoreStr=wc!=null?fmt(wc):fmt(sv(comp.score));
+    pdf.setFontSize(5.5);cx2=M+2;pdf.setFont("helvetica","bold");setC("#1E293B");pdf.text(truncText(comp.name,colW0-4),cx2,y+4);
+    cx2=M+colW0;setC("#1D4ED8");pdf.text(compScoreStr,cx2+colWn*0.5,y+4,{align:"center"});cx2+=colWn;
+    const dif=comp.dif;setC(dif>=0?"#059669":"#DC2626");pdf.setFont("helvetica","normal");pdf.text(diffStr(dif),cx2+colWn*0.5,y+4,{align:"center"});cx2+=colWn;
+    ud.direcciones.forEach(d=>{const w=dw[d.name]||0;setC(w===0?"#94A3B8":"#1E293B");const val=ud.compDetail[comp.name]?.[d.name];pdf.text(val?fmt(sv(val)):"-",cx2+colWn*0.5,y+4,{align:"center"});cx2+=colWn;});
+    setD("#F1F5F9");pdf.line(M,y+rowH,M+CW,y+rowH);y+=rowH;
   });
-  y+=6;pdf.setFontSize(6);setC("#94A3B8");pdf.setFont("helvetica","normal");
-  pdf.text("Escala: "+cfg.scaleMin+" - "+cfg.scaleMax,W/2,y,{align:"center"});
+  y+=6;pdf.setFontSize(6);setC("#94A3B8");pdf.setFont("helvetica","normal");pdf.text("Escala: "+cfg.scaleMin+" - "+cfg.scaleMax,W/2,y,{align:"center"});
   return pdf.output("arraybuffer");
 };
 
 const exportZip=async()=>{setExporting(true);setExportProgress("");try{const zip=new JSZip();
   for(let i=0;i<users.length;i++){
-    const user=users[i];
-    setExportProgress("\u23F3 "+String(i+1)+"/"+String(users.length)+": "+user.name);
+    const user=users[i];setExportProgress("⏳ "+String(i+1)+"/"+String(users.length)+": "+user.name);
     const ud=buildUserData(data,user.username);
-    if(ud){
-      const ws=computeWeightedTotal(ud,scaleVal,dirWeights);
-      const safeUser=(user.username||"").replace(/[^\w@.-]/g,"_").substring(0,60);
-      const safeName=(ud.name||"").replace(/[^\w\s\u00e1\u00e9\u00ed\u00f3\u00fa\u00c1\u00c9\u00cd\u00d3\u00da\u00f1\u00d1,.-]/g,"").replace(/\s+/g,"_").substring(0,60);
-      const fileName=safeUser+"#Evaluaci\u00f3n de desempe\u00f1o 2026-"+safeName+".pdf";
-      try{
-        const pdfBuf=generatePDF(ud,config,mapping,dirWeights,ws,scoreLabels);
-        zip.file(fileName,pdfBuf);
-      }catch(pdfErr){
-        console.error("Error PDF "+user.name+":",pdfErr);
-        const html=generateHTML(ud,config,mapping,dirWeights,ws,scoreLabels);
-        zip.file(fileName.replace(".pdf",".html"),html);
-      }
+    if(ud){const ws=computeWeightedTotal(ud,scaleVal,dirWeights);const safeUser=(user.username||"").replace(/[^\w@.-]/g,"_").substring(0,60);const safeName=(ud.name||"").replace(/[^\w\s\u00e1\u00e9\u00ed\u00f3\u00fa\u00c1\u00c9\u00cd\u00d3\u00da\u00f1\u00d1,.-]/g,"").replace(/\s+/g,"_").substring(0,60);const fileName=safeUser+"#Evaluación de desempeño 2026-"+safeName+".pdf";
+      try{const pdfBuf=generatePDF(ud,config,mapping,dirWeights,ws,scoreLabels);zip.file(fileName,pdfBuf);}
+      catch(pdfErr){console.error("Error PDF "+user.name+":",pdfErr);const html=generateHTML(ud,config,mapping,dirWeights,ws,scoreLabels);zip.file(fileName.replace(".pdf",".html"),html);}
     }
     if(i%5===0)await new Promise(r=>setTimeout(r,10));
   }
@@ -937,8 +734,6 @@ if(!connected){return(<div style={{minHeight:"100vh",background:C.bg,display:"fl
       <input value={sheetId} onChange={e=>setSheetId(e.target.value)} placeholder="Pegá acá el ID..." style={{width:"100%",padding:"10px 14px",borderRadius:10,border:`1.5px solid ${C.border}`,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:font}}/>
       <p style={{fontSize:10,color:C.textLight,marginTop:4}}>Es la parte de la URL entre /d/ y /edit</p>
     </div>
-
-    {/* 9-Box optional field */}
     {!showPotField?
       <button onClick={()=>setShowPotField(true)} style={{width:"100%",padding:"10px",borderRadius:10,border:`1.5px dashed ${C.border}`,background:"transparent",color:C.textSec,fontSize:12,cursor:"pointer",fontFamily:font,fontWeight:500,marginBottom:16,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
         <span style={{fontSize:16}}>🧩</span> Agregar Sheet de Potencial (9-Box)
@@ -949,12 +744,11 @@ if(!connected){return(<div style={{minHeight:"100vh",background:C.bg,display:"fl
           <button onClick={()=>{setShowPotField(false);setPotSheetId("");}} style={{background:"none",border:"none",color:C.textLight,cursor:"pointer",fontSize:14,padding:"2px 4px"}}>✕</button>
         </div>
         <input value={potSheetId} onChange={e=>setPotSheetId(e.target.value)} placeholder="ID del Sheet de Potencial..." style={{width:"100%",padding:"10px 14px",borderRadius:8,border:`1.5px solid #E9D5FF`,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:font}}/>
-        <p style={{fontSize:10,color:C.textLight,marginTop:4}}>Debe tener la misma estructura que el principal. El 9-Box cruza Desempeño × Potencial.</p>
+        <p style={{fontSize:10,color:C.textLight,marginTop:4}}>Debe tener la misma estructura que el principal.</p>
       </div>
     }
-
     <div style={{textAlign:"left",marginBottom:24,background:C.borderLight,borderRadius:10,padding:14}}>
-      <p style={{fontSize:12,color:C.textSec,margin:0}}>La escala y pesos se detectan automáticamente. Ajustá pesos, etiquetas y escala desde ⚙️ <strong>Opciones Avanzadas</strong>.</p>
+      <p style={{fontSize:12,color:C.textSec,margin:0}}>La escala y pesos se detectan automáticamente desde la pestaña <strong>Inputs</strong>. Ajustá todo desde ⚙️ <strong>Opciones Avanzadas</strong>.</p>
     </div>
     {error&&<p style={{color:C.danger,fontSize:12,marginBottom:16,background:C.dangerBg,padding:12,borderRadius:10}}>{error}</p>}
     <button onClick={loadData} disabled={loading||!sheetId} style={{width:"100%",padding:"11px",borderRadius:10,border:"none",background:C.primary,color:C.white,fontSize:14,fontWeight:600,cursor:loading?"wait":"pointer",opacity:loading?0.7:1,fontFamily:font}}>{loading?"Conectando...":"Conectar y cargar datos"}</button>
@@ -981,22 +775,13 @@ const header=(<div style={{background:C.headerBg,borderBottom:`1.5px solid ${C.h
   </div>
 </div>);
 
-const settingsModal=showSettings&&config?<SettingsModal config={config} mapping={mapping} onChangeMapping={setMapping} dirWeights={dirWeights} onChangeDirWeights={setDirWeights} scoreLabels={scoreLabels} onChangeScoreLabels={setScoreLabels} onClose={()=>setShowSettings(false)}/>:null;
+const settingsModal=showSettings&&config?<SettingsModal config={config} mapping={mapping} onChangeMapping={setMapping} dirWeights={dirWeights} onChangeDirWeights={setDirWeights} scoreLabels={scoreLabels} onChangeScoreLabels={setScoreLabels} onChangeConfig={handleChangeConfig} onClose={()=>setShowSettings(false)}/>:null;
 
 const potWarningBanner=potWarning?<div style={{background:C.warningBg,borderBottom:`1px solid #FDE68A`,padding:"10px 24px",fontSize:12,color:C.warning,fontWeight:500,display:"flex",alignItems:"center",gap:8}}>⚠️ {potWarning}</div>:null;
 
-// 9-Box view
 if(view==="ninebox"&&has9Box){return(<div style={{minHeight:"100vh",background:C.bg,fontFamily:font}}>
   {header}{potWarningBanner}{settingsModal}
-  <NineBoxView
-    data={data} potData={potData}
-    config={config} potConfig={potConfig}
-    scaleVal={scaleVal} potScaleVal={potScaleVal}
-    mx={mx} potMx={potMx}
-    users={users} mapping={mapping} potMapping={potMapping}
-    dirWeights={dirWeights} potDirWeights={potDirWeights}
-    onSelectUser={handleSelectUser}
-  />
+  <NineBoxView data={data} potData={potData} config={config} potConfig={potConfig} scaleVal={scaleVal} potScaleVal={potScaleVal} mx={mx} potMx={potMx} users={users} mapping={mapping} potMapping={potMapping} dirWeights={dirWeights} potDirWeights={potDirWeights} onSelectUser={handleSelectUser}/>
 </div>);}
 
 if(view==="overview"||!userData){return(<div style={{minHeight:"100vh",background:C.bg,fontFamily:font}}>
@@ -1013,7 +798,6 @@ const scoreLbl=getScoreLabel(weightedTotal,scoreLabels);
 return(<div style={{minHeight:"100vh",background:C.bg,fontFamily:font}}>
   {header}<tt.Tip/>{settingsModal}
   <div style={{maxWidth:960,margin:"0 auto",padding:24}}>
-    {/* Hero */}
     <div style={{background:"linear-gradient(135deg,#3B5FE5,#5B7FFF)",borderRadius:14,padding:24,marginBottom:20,color:C.white}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:16}}>
         <div>
@@ -1053,14 +837,12 @@ return(<div style={{minHeight:"100vh",background:C.bg,fontFamily:font}}>
           const qComments=(userData.comments||{})[qName]||[];
           return(<Card key={i}><div style={{display:"flex",gap:20,alignItems:"center"}}>
             <div style={{flex:1}}><h4 style={{fontSize:13,fontWeight:700,color:C.text,margin:"0 0 4px"}}>{qName}</h4>{qData.dim&&<p style={{fontSize:11,color:C.textLight,margin:"0 0 10px"}}>{qData.dim}</p>}
-              {segments.map((seg,j)=>(<div key={j} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",fontSize:13}}><span style={{display:"flex",alignItems:"center",gap:6,fontWeight:500}}><span style={{width:8,height:8,borderRadius:4,background:C.cats[j%8]}}/>{seg.label}</span><span style={{fontWeight:600}}>{fmt(seg.scaled)}</span></div>))}
+              {segments.map((seg,j)=>(<div key={j} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",fontSize:13}}><span style={{display:"flex",alignItems:"center",gap:6,fontWeight:500}}><span style={{width:8,height:8,borderRadius:4,background:C.cats[j%8],display:"inline-block"}}/>{seg.label}</span><span style={{fontWeight:600}}>{fmt(seg.scaled)}</span></div>))}
             </div>{segments.length>=1&&<div style={{flexShrink:0}}><RingChart segments={segments.map(s=>({...s,value:s.scaled}))} maxVal={mx} size={60}/></div>}
           </div>
           {qComments.length>0&&<div style={{borderTop:`1px solid ${C.borderLight}`,marginTop:12,paddingTop:10}}>
             {qComments.map((c,ci)=>(<div key={ci} style={{padding:"8px 12px",marginBottom:6,background:C.borderLight,borderRadius:8}}>
-              <div style={{marginBottom:3}}>
-                <span style={{fontSize:11,fontWeight:600,color:C.textSec}}>{c.dir}</span>
-              </div>
+              <div style={{marginBottom:3}}><span style={{fontSize:11,fontWeight:600,color:C.textSec}}>{c.dir}</span></div>
               <p style={{fontSize:12,color:C.text,margin:0,lineHeight:1.5,fontStyle:"italic"}}>{c.comment}</p>
             </div>))}
           </div>}
