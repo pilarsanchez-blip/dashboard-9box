@@ -3,8 +3,8 @@ import * as d3 from "d3";
 import JSZip from "jszip";
 import { jsPDF } from "jspdf";
 
-const SHEET_NAMES={inputs:"Inputs",total:"Total por colaborador",competencia:"Por competencia por colaborador",direccion:"Por dirección por colaborador",dirCompetencia:"Por dirección por competencia por colaborador",respuestas:"Respuestas por colaborador",comentarios:"Comentarios"};
-const COL={ciclo:"Ciclo",username:"Username evaluado",nombre:"Nombre Evaluado",puntaje:"Puntaje",difTotal:"Dif con Total",dimension:"Dimensión",difDimension:"Dif con Total por dimensión",direccion:"Dirección",difDireccion:"Dif con Total por dirección",peso:"Peso",comentario:"Comentario",preguntaCorta:"Pregunta acortada",evaluador:"Nombre Evaluador"};
+const SHEET_NAMES={inputs:"Inputs",total:"Total por colaborador",competencia:"Por competencia por colaborador",direccion:"Por dirección por colaborador",dirCompetencia:"Por dirección por competencia por colaborador",respuestas:"Respuestas por colaborador",comentarios:"Comentarios",respuestasAbiertas:"Respuestas abiertas"};
+const COL={ciclo:"Ciclo",username:"Username evaluado",nombre:"Nombre Evaluado",puntaje:"Puntaje",difTotal:"Dif con Total",dimension:"Dimensión",difDimension:"Dif con Total por dimensión",direccion:"Dirección",difDireccion:"Dif con Total por dirección",peso:"Peso",comentario:"Comentario",preguntaCorta:"Pregunta acortada",evaluador:"Nombre Evaluador",respuesta:"Respuesta"};
 
 /* ─── Palette: celeste-blue gradient, NO green ─── */
 const C={
@@ -253,7 +253,7 @@ const SettingsModal=({config,mapping,onChangeMapping,dirWeights,onChangeDirWeigh
   );
 };
 
-const buildUserData=(data,userId)=>{const matchUser=(r)=>{const u=r[COL.username]||r[COL.nombre];return u===userId;};const tRow=data.total.find(matchUser);if(!tRow)return null;const competencias=data.comp.filter(r=>matchUser(r)&&r[COL.dimension]?.trim()).map(r=>({name:r[COL.dimension],score:parseFloat(r[COL.puntaje])||0,dif:parseFloat(r[COL.difDimension])||0}));const seenDir=new Set();const direcciones=data.dir.filter(matchUser).filter(r=>{const d=r[COL.direccion];if(!d?.trim()||seenDir.has(d))return false;seenDir.add(d);return true;}).map(r=>({name:r[COL.direccion],score:parseFloat(r[COL.puntaje])||0,dif:parseFloat(r[COL.difDireccion])||0,peso:parseFloat(r[COL.peso])||0}));const compDetail={};data.dirComp.filter(matchUser).forEach(r=>{const dim=r[COL.dimension],dir=r[COL.direccion],p=parseFloat(r[COL.puntaje])||0;if(dim?.trim()&&dir?.trim()){if(!compDetail[dim])compDetail[dim]={};compDetail[dim][dir]=p;}});const questions={};data.resp.filter(r=>{const u=r[COL.username]||r["Username evaluado"]||r[COL.nombre]||r["Nombre evaluado"];return u===userId;}).forEach(r=>{const q=r["Pregunta acortada"],dir=r["Dirección"]||r[COL.direccion],dim=r["Dimensión"]||r[COL.dimension],p=parseFloat(r["Puntaje"]||r[COL.puntaje])||0,fullQ=r["Pregunta completa"]||q;if(q?.trim()&&dir?.trim()){const key=q.trim();if(!questions[key])questions[key]={fullQ,dim:dim||"",dirs:{}};questions[key].dirs[dir]=p;}});const comments={};(data.comments||[]).filter(r=>{const u=r[COL.username]||r["Username evaluado"]||r["Username Evaluado"]||r[COL.nombre]||r["Nombre Evaluado"];return u===userId;}).forEach(r=>{const q=(r[COL.preguntaCorta]||r["Pregunta acortada"]||"").trim();const dir=(r[COL.direccion]||r["Dirección"]||r["Direccion"]||"").trim();const com=(r[COL.comentario]||r["Comentario"]||"").trim();const evaluador=(r[COL.evaluador]||r["Nombre Evaluador"]||r["Nombre evaluador"]||"").trim();if(q&&com){if(!comments[q])comments[q]=[];comments[q].push({dir,comment:com,evaluador});}});;return{name:tRow[COL.nombre]||"Sin nombre",ciclo:tRow[COL.ciclo]||"",totalScore:parseFloat(tRow[COL.puntaje])||0,totalDif:parseFloat(tRow[COL.difTotal])||0,competencias,direcciones,compDetail,questions,comments};};
+const buildUserData=(data,userId)=>{const matchUser=(r)=>{const u=r[COL.username]||r[COL.nombre];return u===userId;};const tRow=data.total.find(matchUser);if(!tRow)return null;const competencias=data.comp.filter(r=>matchUser(r)&&r[COL.dimension]?.trim()).map(r=>({name:r[COL.dimension],score:parseFloat(r[COL.puntaje])||0,dif:parseFloat(r[COL.difDimension])||0}));const seenDir=new Set();const direcciones=data.dir.filter(matchUser).filter(r=>{const d=r[COL.direccion];if(!d?.trim()||seenDir.has(d))return false;seenDir.add(d);return true;}).map(r=>({name:r[COL.direccion],score:parseFloat(r[COL.puntaje])||0,dif:parseFloat(r[COL.difDireccion])||0,peso:parseFloat(r[COL.peso])||0}));const compDetail={};data.dirComp.filter(matchUser).forEach(r=>{const dim=r[COL.dimension],dir=r[COL.direccion],p=parseFloat(r[COL.puntaje])||0;if(dim?.trim()&&dir?.trim()){if(!compDetail[dim])compDetail[dim]={};compDetail[dim][dir]=p;}});const questions={};data.resp.filter(r=>{const u=r[COL.username]||r["Username evaluado"]||r[COL.nombre]||r["Nombre evaluado"];return u===userId;}).forEach(r=>{const q=r["Pregunta acortada"],dir=r["Dirección"]||r[COL.direccion],dim=r["Dimensión"]||r[COL.dimension],p=parseFloat(r["Puntaje"]||r[COL.puntaje])||0,fullQ=r["Pregunta completa"]||q;if(q?.trim()&&dir?.trim()){const key=q.trim();if(!questions[key])questions[key]={fullQ,dim:dim||"",dirs:{}};questions[key].dirs[dir]=p;}});const comments={};(data.comments||[]).filter(r=>{const u=r[COL.username]||r["Username evaluado"]||r["Username Evaluado"]||r[COL.nombre]||r["Nombre Evaluado"];return u===userId;}).forEach(r=>{const q=(r[COL.preguntaCorta]||r["Pregunta acortada"]||"").trim();const dir=(r[COL.direccion]||r["Dirección"]||r["Direccion"]||"").trim();const com=(r[COL.comentario]||r["Comentario"]||"").trim();const evaluador=(r[COL.evaluador]||r["Nombre Evaluador"]||r["Nombre evaluador"]||"").trim();if(q&&com){if(!comments[q])comments[q]=[];comments[q].push({dir,comment:com,evaluador});}});;const respuestasAbiertas={};(data.respuestasAbiertas||[]).filter(r=>{const u=r["Username Evaluado"]||r[COL.username]||r[COL.nombre]||"";return u===userId;}).forEach(r=>{const q=(r["Pregunta acortada"]||r[COL.preguntaCorta]||"").trim();const dir=(r[COL.direccion]||r["Dirección"]||"").trim();const resp=(r["Respuesta"]||r[COL.respuesta]||"").trim();const evaluador=(r["Nombre Evaluador"]||r[COL.evaluador]||"").trim();if(q&&resp){if(!respuestasAbiertas[q])respuestasAbiertas[q]=[];respuestasAbiertas[q].push({dir,resp,evaluador});}});return{name:tRow[COL.nombre]||"Sin nombre",ciclo:tRow[COL.ciclo]||"",totalScore:parseFloat(tRow[COL.puntaje])||0,totalDif:parseFloat(tRow[COL.difTotal])||0,competencias,direcciones,compDetail,questions,comments,respuestasAbiertas};};;
 
 const computeWeightedTotal=(ud,scaleVal,dirWeights)=>{if(!ud||!ud.direcciones.length)return 0;const items=ud.direcciones.map(d=>({dir:d.name,score:scaleVal(d.score)}));return weightedAvgByDir(items,dirWeights);};
 
@@ -480,7 +480,7 @@ const qCards=Object.entries(ud.questions).map(([qName,qData])=>{const segs=Objec
 const dirHeaders=ud.direcciones.map(d=>`<th style="text-align:center;padding:10px;font-size:11px;color:#64748B;${(dirWeights[d.name]||0)===0?"opacity:0.35":""}">${d.name}</th>`).join("");
 const compRows=ud.competencias.map((c,i)=>{const wc=computeWeightedComp(c.name,ud.compDetail,(v)=>remapScale(v,config,mapping),dirWeights);const compScoreStr=wc!=null?fmt(wc):sv(c.score);const dirCells=ud.direcciones.map(d=>`<td style="text-align:center;padding:10px;${(dirWeights[d.name]||0)===0?"opacity:0.35":""}">${ud.compDetail[c.name]?.[d.name]?sv(ud.compDetail[c.name][d.name]):"-"}</td>`).join("");return`<tr style="background:${i%2===0?"#fff":"#F8FAFC"}"><td style="padding:10px;font-weight:600">${c.name}</td><td style="text-align:center;padding:10px;font-weight:700;color:#1D4ED8">${compScoreStr}</td><td style="text-align:center;padding:10px"><span style="padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;background:${c.dif>=0?"#D1FAE5":"#FEE2E2"};color:${c.dif>=0?"#059669":"#DC2626"}">${c.dif>=0?"↑":"↓"} ${Math.abs(c.dif).toFixed(1)}</span></td>${dirCells}</tr>`;}).join("");
 const radarSvg=genRadar(ud.competencias.map(c=>{const wc=computeWeightedComp(c.name,ud.compDetail,(v)=>remapScale(v,config,mapping),dirWeights);return{label:c.name,value:wc!=null?wc:parseFloat(sv(c.score))};}));
-return`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${ud.name}</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,sans-serif;background:#F8FAFC;padding:24px;color:#1E293B}.card{background:#fff;border-radius:14px;border:1.5px solid #E2E8F0;margin-bottom:20px;overflow:hidden}.card-head{padding:14px 18px;border-bottom:1px solid #F1F5F9;font-size:15px;font-weight:700}.card-body{padding:18px}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}table{width:100%;border-collapse:collapse;font-size:13px}th{border-bottom:2px solid #E2E8F0;padding:10px;color:#64748B;font-weight:600}td{border-bottom:1px solid #F1F5F9;padding:10px}@media print{body{padding:0}.card{break-inside:avoid}}</style></head><body><div style="max-width:900px;margin:0 auto"><div class="card" style="background:linear-gradient(135deg,#3B5FE5,#5B7FFF);color:#fff;border:none"><div class="card-body" style="padding:24px"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap"><div><div style="font-size:13px;opacity:0.8;margin-bottom:4px">Evaluado</div><div style="font-size:22px;font-weight:700">${ud.name}</div>${ud.ciclo?`<div style="font-size:11px;opacity:0.7;margin-top:4px">${ud.ciclo}</div>`:""}</div><div style="text-align:right"><div style="font-size:13px;opacity:0.8;margin-bottom:4px">Puntaje</div><div style="font-size:40px;font-weight:800">${fmt(weightedScore)}</div>${lblHtml}</div></div></div></div><div class="grid2" style="margin-bottom:20px"><div class="card"><div class="card-head">Competencias</div><div class="card-body" style="display:flex;justify-content:center">${radarSvg}</div></div><div class="card"><div class="card-head">Valoración General</div><div class="card-body">${vBars}</div></div></div><div class="card"><div class="card-head">Detalle por Competencia</div><div class="card-body"><div class="grid2" style="gap:14px">${compCards}</div></div></div>${qCards.length>0?`<div class="card"><div class="card-head">Preguntas</div><div class="card-body">${qCards}</div></div>`:""}<div class="card"><div class="card-head">Resumen Comparativo</div><div class="card-body" style="overflow-x:auto"><table><thead><tr><th style="text-align:left">Competencia</th><th>Puntaje</th><th>vs Prom.</th>${dirHeaders}</tr></thead><tbody>${compRows}</tbody></table></div></div></div></body></html>`;};
+return`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${ud.name}</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,sans-serif;background:#F8FAFC;padding:24px;color:#1E293B}.card{background:#fff;border-radius:14px;border:1.5px solid #E2E8F0;margin-bottom:20px;overflow:hidden}.card-head{padding:14px 18px;border-bottom:1px solid #F1F5F9;font-size:15px;font-weight:700}.card-body{padding:18px}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}table{width:100%;border-collapse:collapse;font-size:13px}th{border-bottom:2px solid #E2E8F0;padding:10px;color:#64748B;font-weight:600}td{border-bottom:1px solid #F1F5F9;padding:10px}@media print{body{padding:0}.card{break-inside:avoid}}</style></head><body><div style="max-width:900px;margin:0 auto"><div class="card" style="background:linear-gradient(135deg,#3B5FE5,#5B7FFF);color:#fff;border:none"><div class="card-body" style="padding:24px"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap"><div><div style="font-size:13px;opacity:0.8;margin-bottom:4px">Evaluado</div><div style="font-size:22px;font-weight:700">${ud.name}</div>${ud.ciclo?`<div style="font-size:11px;opacity:0.7;margin-top:4px">${ud.ciclo}</div>`:""}</div><div style="text-align:right"><div style="font-size:13px;opacity:0.8;margin-bottom:4px">Puntaje Ponderado</div><div style="font-size:40px;font-weight:800">${fmt(weightedScore)}</div>${lblHtml}</div></div></div></div><div class="grid2" style="margin-bottom:20px"><div class="card"><div class="card-head">Competencias</div><div class="card-body" style="display:flex;justify-content:center">${radarSvg}</div></div><div class="card"><div class="card-head">Valoración General</div><div class="card-body">${vBars}</div></div></div><div class="card"><div class="card-head">Detalle por Competencia</div><div class="card-body"><div class="grid2" style="gap:14px">${compCards}</div></div></div>${qCards.length>0?`<div class="card"><div class="card-head">Preguntas</div><div class="card-body">${qCards}</div></div>`:""}<div class="card"><div class="card-head">Resumen Comparativo</div><div class="card-body" style="overflow-x:auto"><table><thead><tr><th style="text-align:left">Competencia</th><th>Puntaje</th><th>vs Prom.</th>${dirHeaders}</tr></thead><tbody>${compRows}</tbody></table></div></div></div></body></html>`;};
 
 const Overview=({data,config,scaleVal,mx,users,mapping,dirWeights})=>{const tt=useTooltip();
 const userScores=useMemo(()=>users.map(u=>{const ud=buildUserData(data,u.username);if(!ud)return{...u,score:0};return{...u,score:computeWeightedTotal(ud,scaleVal,dirWeights)};}),[data,users,scaleVal,dirWeights]);
@@ -493,7 +493,7 @@ const distribution=useMemo(()=>{const step=mx/5;const buckets=Array.from({length
 return(<div style={{maxWidth:960,margin:"0 auto",padding:24}}><tt.Tip/>
   <h2 style={{fontSize:20,fontWeight:700,color:C.text,margin:"0 0 20px",letterSpacing:"-0.02em"}}>Resumen General</h2>
   <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:20}}>
-    {[["Evaluados",users.length],["Promedio",fmt(avgTotal)],["Escala",`${config.scaleMin} - ${config.scaleMax}`]].map(([label,val],i)=>(
+    {[["Evaluados",users.length],["Promedio Ponderado",fmt(avgTotal)],["Escala",`${config.scaleMin} - ${config.scaleMax}`]].map(([label,val],i)=>(
       <Card key={i}><div style={{textAlign:"center",padding:4}}><div style={{fontSize:11,color:C.textLight,marginBottom:4,fontWeight:500,textTransform:"uppercase",letterSpacing:"0.05em"}}>{label}</div><div style={{fontSize:28,fontWeight:800,color:C.primary}}>{val}</div></div></Card>
     ))}
   </div>
@@ -538,13 +538,13 @@ const[potWarning,setPotWarning]=useState(null);
 const tt=useTooltip();
 
 const loadData=async()=>{setLoading(true);setError(null);try{
-  const results=await Promise.allSettled([fetchSheet(sheetId,SHEET_NAMES.inputs),fetchSheet(sheetId,SHEET_NAMES.total),fetchSheet(sheetId,SHEET_NAMES.competencia),fetchSheet(sheetId,SHEET_NAMES.direccion),fetchSheet(sheetId,SHEET_NAMES.dirCompetencia),fetchSheet(sheetId,SHEET_NAMES.respuestas),fetchSheet(sheetId,SHEET_NAMES.comentarios)]);
-  const[iR,tR,cR,dR,dcR,rR,comR]=results;
+  const results=await Promise.allSettled([fetchSheet(sheetId,SHEET_NAMES.inputs),fetchSheet(sheetId,SHEET_NAMES.total),fetchSheet(sheetId,SHEET_NAMES.competencia),fetchSheet(sheetId,SHEET_NAMES.direccion),fetchSheet(sheetId,SHEET_NAMES.dirCompetencia),fetchSheet(sheetId,SHEET_NAMES.respuestas),fetchSheet(sheetId,SHEET_NAMES.comentarios),fetchSheet(sheetId,SHEET_NAMES.respuestasAbiertas)]);
+  const[iR,tR,cR,dR,dcR,rR,comR,raR]=results;
   if(tR.status==="rejected")throw new Error("Error al cargar datos principales");
   const cfg=iR.status==="fulfilled"?parseInputs(iR.value):{scaleMin:1,scaleMax:5,origMin:1,origMax:5};
   setConfig(cfg);setMapping(generateMapping(cfg.origMin,cfg.origMax,cfg.scaleMax,"proportional"));
   const dirData=dR.status==="fulfilled"?dR.value:[];setDirWeights(detectDirections(dirData));
-  setData({total:tR.value,comp:cR.status==="fulfilled"?cR.value:[],dir:dirData,dirComp:dcR.status==="fulfilled"?dcR.value:[],resp:rR.status==="fulfilled"?rR.value:[],comments:comR.status==="fulfilled"?comR.value:[]});
+  setData({total:tR.value,comp:cR.status==="fulfilled"?cR.value:[],dir:dirData,dirComp:dcR.status==="fulfilled"?dcR.value:[],resp:rR.status==="fulfilled"?rR.value:[],comments:comR.status==="fulfilled"?comR.value:[],respuestasAbiertas:raR?.status==="fulfilled"?raR.value:[]});
 
   if(potSheetId.trim()){
     try{
@@ -574,6 +574,18 @@ const users=useMemo(()=>{if(!data)return[];const seen=new Set();return data.tota
 const handleSelectUser=(u)=>{setSelectedUser(u);setView("individual");};
 const userData=useMemo(()=>data&&selectedUser?buildUserData(data,selectedUser):null,[data,selectedUser]);
 const weightedTotal=useMemo(()=>userData?computeWeightedTotal(userData,scaleVal,dirWeights):0,[userData,scaleVal,dirWeights]);
+
+const _potUserData=useMemo(()=>{
+  if(!potData||!selectedUser)return null;
+  const selNorm=norm(selectedUser);
+  const selName=users.find(u=>u.username===selectedUser)?.name||"";
+  const selNameNorm=selName?norm(selName):"";
+  const potRow=potData.total.find(r=>{const u=(r[COL.username]||"").trim();const n=(r[COL.nombre]||"").trim();return u===selectedUser||n===selectedUser||n===selName||(selNorm&&norm(u)===selNorm)||(selNameNorm&&norm(n)===selNameNorm);});
+  if(!potRow)return null;
+  const potUd=buildUserData(potData,potRow[COL.username]||potRow[COL.nombre]);
+  if(!potUd)return null;
+  return{ud:potUd,score:computeWeightedTotal(potUd,potScaleVal,potDirWeights)};
+},[potData,selectedUser,users,potScaleVal,potDirWeights]);
 
 
 
@@ -611,7 +623,7 @@ const generatePDF=(ud,cfg,mp,dw,weightedScore,labels)=>{
   pdf.setFont("helvetica","normal");pdf.setFontSize(9);pdf.setTextColor(255,255,255);pdf.text("Evaluado",M+6,y+8);
   pdf.setFont("helvetica","bold");pdf.setFontSize(16);pdf.text(ud.name||"",M+6,y+17);
   if(ud.ciclo){pdf.setFont("helvetica","normal");pdf.setFontSize(8);pdf.text(ud.ciclo,M+6,y+23);}
-  pdf.setFont("helvetica","normal");pdf.setFontSize(9);pdf.text("Puntaje",M+CW-6,y+8,{align:"right"});
+  pdf.setFont("helvetica","normal");pdf.setFontSize(9);pdf.text("Puntaje Ponderado",M+CW-6,y+8,{align:"right"});
   pdf.setFont("helvetica","bold");pdf.setFontSize(26);pdf.text(fmt(weightedScore),M+CW-6,y+22,{align:"right"});
   if(lbl){pdf.setFontSize(9);pdf.setFont("helvetica","normal");pdf.text(lbl.label,M+CW-6,y+30,{align:"right"});}
   y+=heroH+8;
@@ -689,6 +701,40 @@ const generatePDF=(ud,cfg,mp,dw,weightedScore,labels)=>{
     setD("#F1F5F9");pdf.line(M,y+rowH,M+CW,y+rowH);y+=rowH;
   });
   y+=6;pdf.setFontSize(6);setC("#94A3B8");pdf.setFont("helvetica","normal");pdf.text("Escala: "+cfg.scaleMin+" - "+cfg.scaleMax,W/2,y,{align:"center"});
+
+  // ── Respuestas Abiertas ──
+  const raEntries=Object.entries(ud.respuestasAbiertas||{});
+  if(raEntries.length>0){
+    y+=10;checkPage(16);
+    pdf.setFont("helvetica","bold");pdf.setFontSize(11);setC("#1E293B");
+    pdf.text("Respuestas Abiertas",M,y+4);y+=10;
+    raEntries.forEach(([pregunta,respuestas])=>{
+      // Pregunta header
+      checkPage(12);
+      setF("#EBF0FF");pdf.roundedRect(M,y,CW,8,2,2,"F");
+      pdf.setFont("helvetica","bold");pdf.setFontSize(8);setC("#3B5FE5");
+      pdf.text(truncText(pregunta,CW-8),M+4,y+5.5);
+      y+=10;
+      // Each response
+      respuestas.forEach((r,ri)=>{
+        const lines=pdf.splitTextToSize(r.resp,CW-20);
+        const cardH=10+lines.length*4.5;
+        checkPage(cardH+3);
+        // left accent bar color
+        const[ar,ag,ab]=hexToRgb(["#3B82F6","#D97706","#8B5CF6","#E89D2D","#EC4899","#0EA5E9","#E45A3B","#B45925"][ri%8]);
+        pdf.setFillColor(ar,ag,ab);pdf.rect(M,y,2,cardH,"F");
+        setF("#F8FAFC");pdf.roundedRect(M+2,y,CW-2,cardH,1.5,1.5,"F");
+        pdf.setFont("helvetica","bold");pdf.setFontSize(7);setC("#64748B");
+        const dirLabel=r.dir+(r.evaluador?" · "+r.evaluador:"");
+        pdf.text(truncText(dirLabel,CW-10),M+6,y+4.5);
+        pdf.setFont("helvetica","normal");pdf.setFontSize(7);setC("#1E293B");
+        pdf.text(lines,M+6,y+9);
+        y+=cardH+3;
+      });
+      y+=4;
+    });
+  }
+
   return pdf.output("arraybuffer");
 };
 
@@ -790,7 +836,7 @@ return(<div style={{minHeight:"100vh",background:C.bg,fontFamily:font}}>
           {userData.ciclo&&<div style={{fontSize:11,opacity:0.7,marginTop:4}}>{userData.ciclo}</div>}
         </div>
         <div style={{textAlign:"right"}}>
-          <div style={{fontSize:12,opacity:0.8,marginBottom:4,fontWeight:500}}>Puntaje</div>
+          <div style={{fontSize:12,opacity:0.8,marginBottom:4,fontWeight:500}}>Puntaje Ponderado</div>
           <span style={{fontSize:40,fontWeight:800}}>{fmt(weightedTotal)}</span>
           {scoreLbl&&<div style={{marginTop:6}}><span style={{padding:"4px 14px",borderRadius:20,fontSize:13,fontWeight:600,background:"rgba(255,255,255,0.2)",color:C.white,border:"1px solid rgba(255,255,255,0.3)"}}>{scoreLbl.label}</span></div>}
         </div>
@@ -841,6 +887,22 @@ return(<div style={{minHeight:"100vh",background:C.bg,fontFamily:font}}>
         {userData.direcciones.map((d,j)=><td key={j} style={{textAlign:"center",padding:"10px 12px",color:C.text,opacity:(dirWeights[d.name]||0)===0?0.35:1}}>{userData.compDetail[comp.name]?.[d.name]?fmt(scaleVal(userData.compDetail[comp.name][d.name])):"-"}</td>)}
       </tr>))}</tbody>
     </table></div></Card>
+
+    {userData.respuestasAbiertas&&Object.keys(userData.respuestasAbiertas).length>0&&(<>
+      <h3 style={{fontSize:16,fontWeight:700,color:C.text,margin:"22px 0 14px",letterSpacing:"-0.02em"}}>Respuestas Abiertas</h3>
+      <div style={{display:"flex",flexDirection:"column",gap:16,marginBottom:22}}>
+        {Object.entries(userData.respuestasAbiertas).map(([pregunta,respuestas],qi)=>(
+          <Card key={qi} title={pregunta} icon="💬">
+            {respuestas.map((r,ri)=>(
+              <div key={ri} style={{padding:"10px 14px",marginBottom:8,background:C.borderLight,borderRadius:10,borderLeft:`3px solid ${C.cats[ri%8]}`}}>
+                <div style={{fontSize:11,fontWeight:700,color:C.textSec,marginBottom:4}}>{r.dir}{r.evaluador?` · ${r.evaluador}`:""}</div>
+                <p style={{fontSize:13,color:C.text,margin:0,lineHeight:1.6}}>{r.resp}</p>
+              </div>
+            ))}
+          </Card>
+        ))}
+      </div>
+    </>)}
   </div>
 </div>);
 }
