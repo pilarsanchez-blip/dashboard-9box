@@ -705,20 +705,27 @@ const generatePDF=(ud,cfg,mp,dw,weightedScore,labels)=>{
       pdf.text(truncText(pregunta,CW-8),M+4,y+5.5);
       y+=10;
       // Each response
-      respuestas.forEach((r,ri)=>{
-        const lines=pdf.splitTextToSize(r.resp,CW-20);
-        const cardH=10+lines.length*4.5;
-        checkPage(cardH+3);
-        // left accent bar color
-        const[ar,ag,ab]=hexToRgb(["#3B82F6","#D97706","#8B5CF6","#E89D2D","#EC4899","#0EA5E9","#E45A3B","#B45925"][ri%8]);
-        pdf.setFillColor(ar,ag,ab);pdf.rect(M,y,2,cardH,"F");
-        setF("#F8FAFC");pdf.roundedRect(M+2,y,CW-2,cardH,1.5,1.5,"F");
-        pdf.setFont("helvetica","bold");pdf.setFontSize(7);setC("#64748B");
-        const dirLabel=r.dir;
-        pdf.text(truncText(dirLabel,CW-10),M+6,y+4.5);
-        pdf.setFont("helvetica","normal");pdf.setFontSize(7);setC("#1E293B");
-        pdf.text(lines,M+6,y+9);
-        y+=cardH+3;
+      // Agrupar por dirección
+      const byDir={};respuestas.forEach(r=>{if(!byDir[r.dir])byDir[r.dir]=[];byDir[r.dir].push(r.resp);});
+      Object.entries(byDir).forEach(([dir,resps])=>{
+        // Dirección header
+        checkPage(10);
+        pdf.setFont("helvetica","bold");pdf.setFontSize(8);setC("#3B5FE5");
+        pdf.text(dir,M+2,y+4);
+        setD("#C7D4FE");pdf.setLineWidth(0.3);pdf.line(M,y+6,M+CW,y+6);
+        y+=9;
+        // Responses
+        resps.forEach((resp)=>{
+          const lines=pdf.splitTextToSize(resp,CW-10);
+          const cardH=6+lines.length*4.5;
+          checkPage(cardH+3);
+          setF("#F8FAFC");pdf.roundedRect(M,y,CW,cardH,1.5,1.5,"F");
+          setD("#E2E8F0");pdf.setLineWidth(0.2);pdf.roundedRect(M,y,CW,cardH,1.5,1.5,"S");
+          pdf.setFont("helvetica","normal");pdf.setFontSize(7);setC("#1E293B");
+          pdf.text(lines,M+4,y+5);
+          y+=cardH+3;
+        });
+        y+=3;
       });
       y+=4;
     });
@@ -882,10 +889,14 @@ return(<div style={{minHeight:"100vh",background:C.bg,fontFamily:font}}>
       <div style={{display:"flex",flexDirection:"column",gap:16,marginBottom:22}}>
         {Object.entries(userData.respuestasAbiertas).map(([pregunta,respuestas],qi)=>(
           <Card key={qi} title={pregunta} icon="💬">
-            {respuestas.map((r,ri)=>(
-              <div key={ri} style={{padding:"10px 14px",marginBottom:8,background:C.borderLight,borderRadius:10,borderLeft:`3px solid ${C.cats[ri%8]}`}}>
-                <div style={{fontSize:11,fontWeight:700,color:C.textSec,marginBottom:4}}>{r.dir}</div>
-                <p style={{fontSize:13,color:C.text,margin:0,lineHeight:1.6}}>{r.resp}</p>
+            {Object.entries(respuestas.reduce((acc,r)=>{if(!acc[r.dir])acc[r.dir]=[];acc[r.dir].push(r.resp);return acc;},{})).map(([dir,resps],di)=>(
+              <div key={di} style={{marginBottom:16}}>
+                <div style={{fontSize:12,fontWeight:700,color:C.primary,marginBottom:8,paddingBottom:4,borderBottom:`1px solid ${C.borderLight}`}}>{dir}</div>
+                {resps.map((resp,ri)=>(
+                  <div key={ri} style={{padding:"10px 14px",marginBottom:6,background:C.borderLight,borderRadius:10}}>
+                    <p style={{fontSize:13,color:C.text,margin:0,lineHeight:1.6}}>{resp}</p>
+                  </div>
+                ))}
               </div>
             ))}
           </Card>
