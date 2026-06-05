@@ -116,7 +116,7 @@ const SettingsModal=({config,mapping,onChangeMapping,dirWeights,onChangeDirWeigh
   const rebuildMapping=(oMin,oMax,sMax,preset)=>{setLocalMapping(generateMapping(oMin,oMax,sMax,preset||activePreset||"proportional"));};
 
   const applyPreset=(p)=>{setLocalMapping(generateMapping(localOrigMin,localOrigMax,localScaleMax,p));setActivePreset(p);};
-  useEffect(()=>{for(const p of["proportional","normalized"]){const ref=generateMapping(localOrigMin,localOrigMax,localScaleMax,p);if(keys.every(k=>Math.abs((localMapping[k]||0)-(ref[k]||0))<0.5)){setActivePreset(p);return;}}setActivePreset("custom");},[localMapping,localOrigMin,localOrigMax,localScaleMax]);
+  useEffect(()=>{for(const p of["proportional","normalized"]){const ref=generateMapping(localOrigMin,localOrigMax,localScaleMax,p);if(keys.every(k=>Math.abs((localMapping[k]||0)-(ref[k]||0))<0.5)){setActivePreset(p);return;}}setActivePreset("custom");},[localMapping,localOrigMin,localOrigMax,localScaleMax,keys]);
   const totalW=dirNames.reduce((s,d)=>s+(localWeights[d]||0),0);
   const maxOut=localScaleMax;
 
@@ -587,11 +587,7 @@ const potUserData=useMemo(()=>{
   return{ud:potUd,score:computeWeightedTotal(potUd,potScaleVal,potDirWeights)};
 },[potData,selectedUser,users,potScaleVal,potDirWeights]);
 
-const nineBoxPosition=useMemo(()=>{
-  if(!potUserData)return null;
-  const cell=getNineBoxCell(weightedTotal,potUserData.score,mx);
-  return{...cell,cellInfo:NINE_BOX_LABELS.cells[cell.row][cell.col],potScore:potUserData.score};
-},[potUserData,weightedTotal,mx]);
+
 
 const[exportProgress,setExportProgress]=useState("");
 
