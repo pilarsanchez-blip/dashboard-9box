@@ -47,7 +47,7 @@ const detectDirections=(dirData)=>{const dirs={};dirData.forEach(r=>{const d=r[C
 const weightedAvgByDir=(items,dirWeights)=>{const v=items.filter(it=>(dirWeights[it.dir]||0)>0);if(!v.length)return 0;const tw=v.reduce((s,it)=>s+(dirWeights[it.dir]||0),0);return tw===0?0:v.reduce((s,it)=>s+it.score*(dirWeights[it.dir]||0),0)/tw;};
 
 /* ─── Score labels ─── */
-const DEFAULT_LABELS=[{min:0,max:1.99,label:"No cumple",color:"#DC2626"},{min:2,max:2.99,label:"En desarrollo",color:"#D97706"},{min:3,max:3.99,label:"Cumple",color:"#3B82F6"},{min:4,max:5,label:"Supera",color:"#1D4ED8"}];
+const DEFAULT_LABELS=[];
 const getScoreLabel=(score,labels)=>{const n=parseFloat(score);if(isNaN(n))return null;return labels.find(l=>n>=l.min&&n<=l.max)||null;};
 
 const useTooltip=()=>{const[tip,setTip]=useState(null);const show=(e,content)=>{const r=e.currentTarget.getBoundingClientRect();setTip({x:r.left+r.width/2,y:r.top-8,content});};const hide=()=>setTip(null);const Tip=()=>tip?<div style={{position:"fixed",left:tip.x,top:tip.y,transform:"translate(-50%,-100%)",background:C.text,color:"#fff",padding:"8px 14px",borderRadius:10,fontSize:12,fontWeight:500,zIndex:9999,pointerEvents:"none",whiteSpace:"pre-line",maxWidth:280,boxShadow:"0 4px 16px rgba(0,0,0,0.15)",lineHeight:1.4}}>{tip.content}</div>:null;return{show,hide,Tip};};
@@ -113,7 +113,7 @@ const SettingsModal=({config,mapping,onChangeMapping,dirWeights,onChangeDirWeigh
   const keys=Object.keys(localMapping).map(Number).sort((a,b)=>a-b);
   const dirNames=Object.keys(localWeights).sort();
 
-  const rebuildMapping=(oMin,oMax,sMax,preset)=>{setLocalMapping(generateMapping(oMin,oMax,sMax,preset||activePreset||"proportional"));};
+  const rebuildMapping=(oMin,oMax,sMax,preset)=>{setLocalMapping(generateMapping(oMin,oMax,sMax,preset||activePreset||"normalized"));};
 
   const applyPreset=(p)=>{setLocalMapping(generateMapping(localOrigMin,localOrigMax,localScaleMax,p));setActivePreset(p);};
   useEffect(()=>{for(const p of["proportional","normalized"]){const ref=generateMapping(localOrigMin,localOrigMax,localScaleMax,p);if(keys.every(k=>Math.abs((localMapping[k]||0)-(ref[k]||0))<0.5)){setActivePreset(p);return;}}setActivePreset("custom");},[localMapping,localOrigMin,localOrigMax,localScaleMax,keys]);
@@ -542,7 +542,7 @@ const loadData=async()=>{setLoading(true);setError(null);try{
   const[iR,tR,cR,dR,dcR,rR,comR,raR]=results;
   if(tR.status==="rejected")throw new Error("Error al cargar datos principales");
   const cfg=iR.status==="fulfilled"?parseInputs(iR.value):{scaleMin:1,scaleMax:5,origMin:1,origMax:5};
-  setConfig(cfg);setMapping(generateMapping(cfg.origMin,cfg.origMax,cfg.scaleMax,"proportional"));
+  setConfig(cfg);setMapping(generateMapping(cfg.origMin,cfg.origMax,cfg.scaleMax,"normalized"));
   const dirData=dR.status==="fulfilled"?dR.value:[];setDirWeights(detectDirections(dirData));
   setData({total:tR.value,comp:cR.status==="fulfilled"?cR.value:[],dir:dirData,dirComp:dcR.status==="fulfilled"?dcR.value:[],resp:rR.status==="fulfilled"?rR.value:[],comments:comR.status==="fulfilled"?comR.value:[],respuestasAbiertas:raR?.status==="fulfilled"?raR.value:[]});
 
@@ -554,7 +554,7 @@ const loadData=async()=>{setLoading(true);setError(null);try{
       else if(!ptR.value||ptR.value.length===0){setPotWarning("La pestaña 'Total por colaborador' del Sheet de Potencial está vacía.");setPotData(null);setPotConfig(null);}
       else{
         const pCfg=piR.status==="fulfilled"?parseInputs(piR.value):{scaleMin:1,scaleMax:5,origMin:1,origMax:5};
-        setPotConfig(pCfg);setPotMapping(generateMapping(pCfg.origMin,pCfg.origMax,pCfg.scaleMax,"proportional"));
+        setPotConfig(pCfg);setPotMapping(generateMapping(pCfg.origMin,pCfg.origMax,pCfg.scaleMax,"normalized"));
         const potDirData=pdR.status==="fulfilled"?pdR.value:[];setPotDirWeights(detectDirections(potDirData));
         setPotData({total:ptR.value,comp:pcR.status==="fulfilled"?pcR.value:[],dir:potDirData,dirComp:pdcR.status==="fulfilled"?pdcR.value:[],resp:prR.status==="fulfilled"?prR.value:[]});
         setPotWarning(null);
@@ -575,6 +575,17 @@ const handleSelectUser=(u)=>{setSelectedUser(u);setView("individual");};
 const userData=useMemo(()=>data&&selectedUser?buildUserData(data,selectedUser):null,[data,selectedUser]);
 const weightedTotal=useMemo(()=>userData?computeWeightedTotal(userData,scaleVal,dirWeights):0,[userData,scaleVal,dirWeights]);
 
+const _potUserData=useMemo(()=>{
+  if(!potData||!selectedUser)return null;
+  const selNorm=norm(selectedUser);
+  const selName=users.find(u=>u.username===selectedUser)?.name||"";
+  const selNameNorm=selName?norm(selName):"";
+  const potRow=potData.total.find(r=>{const u=(r[COL.username]||"").trim();const n=(r[COL.nombre]||"").trim();return u===selectedUser||n===selectedUser||n===selName||(selNorm&&norm(u)===selNorm)||(selNameNorm&&norm(n)===selNameNorm);});
+  if(!potRow)return null;
+  const potUd=buildUserData(potData,potRow[COL.username]||potRow[COL.nombre]);
+  if(!potUd)return null;
+  return{ud:potUd,score:computeWeightedTotal(potUd,potScaleVal,potDirWeights)};
+},[potData,selectedUser,users,potScaleVal,potDirWeights]);
 
 
 
@@ -583,7 +594,7 @@ const[exportProgress,setExportProgress]=useState("");
 /* ─── handleChangeConfig: actualiza config y regenera mapping ─── */
 const handleChangeConfig=useCallback((newCfg)=>{
   setConfig(prev=>({...prev,...newCfg}));
-  setMapping(generateMapping(newCfg.origMin,newCfg.origMax,newCfg.scaleMax,"proportional"));
+  setMapping(generateMapping(newCfg.origMin,newCfg.origMax,newCfg.scaleMax,"normalized"));
 },[]);
 
 const generatePDF=(ud,cfg,mp,dw,weightedScore,labels)=>{
