@@ -575,17 +575,7 @@ const handleSelectUser=(u)=>{setSelectedUser(u);setView("individual");};
 const userData=useMemo(()=>data&&selectedUser?buildUserData(data,selectedUser):null,[data,selectedUser]);
 const weightedTotal=useMemo(()=>userData?computeWeightedTotal(userData,scaleVal,dirWeights):0,[userData,scaleVal,dirWeights]);
 
-const _potUserData=useMemo(()=>{
-  if(!potData||!selectedUser)return null;
-  const selNorm=norm(selectedUser);
-  const selName=users.find(u=>u.username===selectedUser)?.name||"";
-  const selNameNorm=selName?norm(selName):"";
-  const potRow=potData.total.find(r=>{const u=(r[COL.username]||"").trim();const n=(r[COL.nombre]||"").trim();return u===selectedUser||n===selectedUser||n===selName||(selNorm&&norm(u)===selNorm)||(selNameNorm&&norm(n)===selNameNorm);});
-  if(!potRow)return null;
-  const potUd=buildUserData(potData,potRow[COL.username]||potRow[COL.nombre]);
-  if(!potUd)return null;
-  return{ud:potUd,score:computeWeightedTotal(potUd,potScaleVal,potDirWeights)};
-},[potData,selectedUser,users,potScaleVal,potDirWeights]);
+
 
 
 
