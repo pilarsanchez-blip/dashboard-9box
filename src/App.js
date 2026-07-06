@@ -44,18 +44,16 @@ const remapResp=(val,config,mapping)=>{const n=parseFloat(val);if(isNaN(n))retur
 
 /* ─── Direction weights ─── */
 const detectDirections=(dirData)=>{
-  // Collect all weights per direction, then average — handles multi-cycle
-  const dirs={};const counts={};
+  // Take first non-zero weight found per direction
+  const dirs={};
   dirData.forEach(r=>{
-    const d=r[COL.direccion]?.trim();const w=parseFloat(r[COL.peso]);
-    if(d&&!isNaN(w)&&w>0){
-      dirs[d]=(dirs[d]||0)+w;counts[d]=(counts[d]||0)+1;
-    } else if(d&&!dirs[d]){dirs[d]=0;counts[d]=1;}
+    const d=r[COL.direccion]?.trim();
+    const w=parseFloat(r[COL.peso]);
+    if(d&&!dirs.hasOwnProperty(d)){
+      dirs[d]=!isNaN(w)?w:0.2;
+    }
   });
-  // Average weight per direction
-  const result={};
-  Object.keys(dirs).forEach(d=>{result[d]=dirs[d]/(counts[d]||1);});
-  return result;
+  return dirs;
 };
 const weightedAvgByDir=(items,dirWeights)=>{const v=items.filter(it=>(dirWeights[it.dir]||0)>0);if(!v.length)return 0;const tw=v.reduce((s,it)=>s+(dirWeights[it.dir]||0),0);return tw===0?0:v.reduce((s,it)=>s+it.score*(dirWeights[it.dir]||0),0)/tw;};
 
@@ -266,7 +264,7 @@ const SettingsModal=({config,mapping,onChangeMapping,dirWeights,onChangeDirWeigh
   );
 };
 
-const buildUserData=(data,userId)=>{const matchUser=(r)=>{const u=r[COL.username]||r[COL.nombre];return u===userId;};const tRow=data.total.find(matchUser);if(!tRow)return null;const compByDim={};data.comp.filter(r=>matchUser(r)&&r[COL.dimension]?.trim()).forEach(r=>{const k=r[COL.dimension].trim();const p=parseFloat(r[COL.puntaje])||0;const d=parseFloat(r[COL.difDimension])||0;if(!compByDim[k])compByDim[k]={scores:[],difs:[]};compByDim[k].scores.push(p);compByDim[k].difs.push(d);});const competencias=Object.entries(compByDim).map(([name,v])=>({name,score:v.scores.reduce((a,b)=>a+b,0)/v.scores.length,dif:v.difs.reduce((a,b)=>a+b,0)/v.difs.length}));const dirByName={};data.dir.filter(matchUser).forEach(r=>{const d=r[COL.direccion]?.trim();if(!d)return;if(!dirByName[d])dirByName[d]={scores:[],difs:[],peso:parseFloat(r[COL.peso])||0};dirByName[d].scores.push(parseFloat(r[COL.puntaje])||0);dirByName[d].difs.push(parseFloat(r[COL.difDireccion])||0);});const direcciones=Object.entries(dirByName).map(([name,v])=>({name,score:v.scores.reduce((a,b)=>a+b,0)/v.scores.length,dif:v.difs.reduce((a,b)=>a+b,0)/v.difs.length,peso:v.peso}));const compDetailRaw={};data.dirComp.filter(matchUser).forEach(r=>{const dim=r[COL.dimension]?.trim(),dir=r[COL.direccion]?.trim(),p=parseFloat(r[COL.puntaje])||0;if(dim&&dir){if(!compDetailRaw[dim])compDetailRaw[dim]={};if(!compDetailRaw[dim][dir])compDetailRaw[dim][dir]=[];compDetailRaw[dim][dir].push(p);}});const compDetail={};Object.entries(compDetailRaw).forEach(([dim,dirs])=>{compDetail[dim]={};Object.entries(dirs).forEach(([dir,vals])=>{compDetail[dim][dir]=vals.reduce((a,b)=>a+b,0)/vals.length;});});const questions={};data.resp.filter(r=>{const u=r[COL.username]||r["Username evaluado"]||r[COL.nombre]||r["Nombre evaluado"];return u===userId;}).forEach(r=>{const q=r["Pregunta acortada"],dir=r["Dirección"]||r[COL.direccion],dim=r["Dimensión"]||r[COL.dimension],p=parseFloat(r["Puntaje"]||r[COL.puntaje])||0,fullQ=r["Pregunta completa"]||q;if(q?.trim()&&dir?.trim()){const key=q.trim();if(!questions[key])questions[key]={fullQ,dim:dim||"",dirs:{}};questions[key].dirs[dir]=p;}});const comments={};(data.comments||[]).filter(r=>{const u=r[COL.username]||r["Username evaluado"]||r["Username Evaluado"]||r[COL.nombre]||r["Nombre Evaluado"];return u===userId;}).forEach(r=>{const q=(r[COL.preguntaCorta]||r["Pregunta acortada"]||"").trim();const dir=(r[COL.direccion]||r["Dirección"]||r["Direccion"]||"").trim();const com=(r[COL.comentario]||r["Comentario"]||"").trim();const evaluador=(r[COL.evaluador]||r["Nombre Evaluador"]||r["Nombre evaluador"]||"").trim();if(q&&com){if(!comments[q])comments[q]=[];comments[q].push({dir,comment:com,evaluador});}});;const respuestasAbiertas={};(data.respuestasAbiertas||[]).filter(r=>{const u=r["Username Evaluado"]||r[COL.username]||r[COL.nombre]||"";return u===userId;}).forEach(r=>{const q=(r["Pregunta acortada"]||r[COL.preguntaCorta]||"").trim();const dir=(r[COL.direccion]||r["Dirección"]||"").trim();const resp=(r["Respuesta"]||r[COL.respuesta]||"").trim();if(q&&resp){if(!respuestasAbiertas[q])respuestasAbiertas[q]=[];respuestasAbiertas[q].push({dir,resp});}});return{name:tRow[COL.nombre]||"Sin nombre",ciclo:tRow[COL.ciclo]||"",totalScore:parseFloat(tRow[COL.puntaje])||0,totalDif:parseFloat(tRow[COL.difTotal])||0,competencias,direcciones,compDetail,questions,comments,respuestasAbiertas};};;
+const buildUserData=(data,userId)=>{const matchUser=(r)=>{const u=r[COL.username]||r[COL.nombre];return u===userId;};const tRow=data.total.find(matchUser);if(!tRow)return null;const compByDim={};data.comp.filter(r=>matchUser(r)&&r[COL.dimension]?.trim()).forEach(r=>{const k=(r[COL.dimension]||"").trim().replace(/\s+/g," ");const p=parseFloat(r[COL.puntaje])||0;const d=parseFloat(r[COL.difDimension])||0;if(!compByDim[k])compByDim[k]={scores:[],difs:[]};compByDim[k].scores.push(p);compByDim[k].difs.push(d);});const competencias=Object.entries(compByDim).map(([name,v])=>({name,score:v.scores.reduce((a,b)=>a+b,0)/v.scores.length,dif:v.difs.reduce((a,b)=>a+b,0)/v.difs.length}));const dirByName={};data.dir.filter(matchUser).forEach(r=>{const d=r[COL.direccion]?.trim();if(!d)return;if(!dirByName[d])dirByName[d]={scores:[],difs:[],peso:parseFloat(r[COL.peso])||0};dirByName[d].scores.push(parseFloat(r[COL.puntaje])||0);dirByName[d].difs.push(parseFloat(r[COL.difDireccion])||0);});const direcciones=Object.entries(dirByName).map(([name,v])=>({name,score:v.scores.reduce((a,b)=>a+b,0)/v.scores.length,dif:v.difs.reduce((a,b)=>a+b,0)/v.difs.length,peso:v.peso}));const compDetailRaw={};data.dirComp.filter(matchUser).forEach(r=>{const dim=(r[COL.dimension]||"").trim().replace(/\s+/g," "),dir=(r[COL.direccion]||"").trim(),p=parseFloat(r[COL.puntaje])||0;if(dim&&dir){if(!compDetailRaw[dim])compDetailRaw[dim]={};if(!compDetailRaw[dim][dir])compDetailRaw[dim][dir]=[];compDetailRaw[dim][dir].push(p);}});const compDetail={};Object.entries(compDetailRaw).forEach(([dim,dirs])=>{compDetail[dim]={};Object.entries(dirs).forEach(([dir,vals])=>{compDetail[dim][dir]=vals.reduce((a,b)=>a+b,0)/vals.length;});});const questions={};data.resp.filter(r=>{const u=r[COL.username]||r["Username evaluado"]||r[COL.nombre]||r["Nombre evaluado"];return u===userId;}).forEach(r=>{const q=r["Pregunta acortada"],dir=r["Dirección"]||r[COL.direccion],dim=r["Dimensión"]||r[COL.dimension],p=parseFloat(r["Puntaje"]||r[COL.puntaje])||0,fullQ=r["Pregunta completa"]||q;if(q?.trim()&&dir?.trim()){const key=q.trim();if(!questions[key])questions[key]={fullQ,dim:dim||"",dirs:{}};questions[key].dirs[dir]=p;}});const comments={};(data.comments||[]).filter(r=>{const u=r[COL.username]||r["Username evaluado"]||r["Username Evaluado"]||r[COL.nombre]||r["Nombre Evaluado"];return u===userId;}).forEach(r=>{const q=(r[COL.preguntaCorta]||r["Pregunta acortada"]||"").trim();const dir=(r[COL.direccion]||r["Dirección"]||r["Direccion"]||"").trim();const com=(r[COL.comentario]||r["Comentario"]||"").trim();const evaluador=(r[COL.evaluador]||r["Nombre Evaluador"]||r["Nombre evaluador"]||"").trim();if(q&&com){if(!comments[q])comments[q]=[];comments[q].push({dir,comment:com,evaluador});}});;const respuestasAbiertas={};(data.respuestasAbiertas||[]).filter(r=>{const u=r["Username Evaluado"]||r[COL.username]||r[COL.nombre]||"";return u===userId;}).forEach(r=>{const q=(r["Pregunta acortada"]||r[COL.preguntaCorta]||"").trim();const dir=(r[COL.direccion]||r["Dirección"]||"").trim();const resp=(r["Respuesta"]||r[COL.respuesta]||"").trim();if(q&&resp){if(!respuestasAbiertas[q])respuestasAbiertas[q]=[];respuestasAbiertas[q].push({dir,resp});}});return{name:tRow[COL.nombre]||"Sin nombre",ciclo:tRow[COL.ciclo]||"",totalScore:parseFloat(tRow[COL.puntaje])||0,totalDif:parseFloat(tRow[COL.difTotal])||0,competencias,direcciones,compDetail,questions,comments,respuestasAbiertas};};;
 
 const computeWeightedTotal=(ud,scaleVal,dirWeights)=>{if(!ud||!ud.direcciones.length)return 0;const items=ud.direcciones.map(d=>({dir:d.name,score:scaleVal(d.score)}));return weightedAvgByDir(items,dirWeights);};
 
@@ -521,7 +519,8 @@ const dimAvgs=useMemo(()=>{
   data.comp.forEach(r=>{
     const raw=(r[COL.username]||r[COL.nombre]||"").trim();
     const u=userKey[raw]||raw;
-    const k=r[COL.dimension]?.trim();
+    // Normalize dimension name: trim + collapse spaces
+    const k=(r[COL.dimension]||"").trim().replace(/\s+/g," ");
     const p=parseFloat(r[COL.puntaje]);
     if(u&&k&&!isNaN(p)){
       if(!perPersonDim[u])perPersonDim[u]={};
