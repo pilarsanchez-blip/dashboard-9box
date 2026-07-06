@@ -43,7 +43,20 @@ const remapScale=(pct,config,mapping)=>{const n=parseFloat(pct);if(isNaN(n))retu
 const remapResp=(val,config,mapping)=>{const n=parseFloat(val);if(isNaN(n))return 0;return interpolateMapping(n,mapping);};
 
 /* ─── Direction weights ─── */
-const detectDirections=(dirData)=>{const dirs={};dirData.forEach(r=>{const d=r[COL.direccion]?.trim();const w=parseFloat(r[COL.peso]);if(d&&!dirs[d])dirs[d]=!isNaN(w)?w:1;});return dirs;};
+const detectDirections=(dirData)=>{
+  // Collect all weights per direction, then average — handles multi-cycle
+  const dirs={};const counts={};
+  dirData.forEach(r=>{
+    const d=r[COL.direccion]?.trim();const w=parseFloat(r[COL.peso]);
+    if(d&&!isNaN(w)&&w>0){
+      dirs[d]=(dirs[d]||0)+w;counts[d]=(counts[d]||0)+1;
+    } else if(d&&!dirs[d]){dirs[d]=0;counts[d]=1;}
+  });
+  // Average weight per direction
+  const result={};
+  Object.keys(dirs).forEach(d=>{result[d]=dirs[d]/(counts[d]||1);});
+  return result;
+};
 const weightedAvgByDir=(items,dirWeights)=>{const v=items.filter(it=>(dirWeights[it.dir]||0)>0);if(!v.length)return 0;const tw=v.reduce((s,it)=>s+(dirWeights[it.dir]||0),0);return tw===0?0:v.reduce((s,it)=>s+it.score*(dirWeights[it.dir]||0),0)/tw;};
 
 /* ─── Score labels ─── */
@@ -484,12 +497,30 @@ return`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${ud.name}</title
 
 const Overview=({data,config,scaleVal,mx,users,mapping,dirWeights})=>{const tt=useTooltip();
 const userScores=useMemo(()=>users.map(u=>{const ud=buildUserData(data,u.username);if(!ud)return{...u,score:0};return{...u,score:computeWeightedTotal(ud,scaleVal,dirWeights)};}),[data,users,scaleVal,dirWeights]);
-const avgTotal=useMemo(()=>{const s=userScores.map(u=>u.score).filter(n=>!isNaN(n)&&n>0);return s.length?s.reduce((a,b)=>a+b,0)/s.length:0;},[userScores]);
+const avgTotal=useMemo(()=>{
+  // Average the puntaje directly from Total sheet, one per unique user (last cycle wins if multiple)
+  const seen={};
+  data.total.forEach(r=>{
+    const u=(r[COL.username]||r[COL.nombre]||"").trim();
+    const p=parseFloat(r[COL.puntaje]);
+    if(u&&!isNaN(p)&&p>0)seen[u]=p;
+  });
+  const vals=Object.values(seen);
+  return vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:0;
+},[data]);
 const dimAvgs=useMemo(()=>{
-  // Per-person per-competencia average (across cycles), then average across persons
+  // Build a username→canonical_key map from total sheet to normalize keys
+  const userKey={};
+  data.total.forEach(r=>{
+    const u=(r[COL.username]||"").trim();
+    const n=(r[COL.nombre]||"").trim();
+    if(u)userKey[u]=u;
+    if(n)userKey[n]=u||n;
+  });
   const perPersonDim={};
   data.comp.forEach(r=>{
-    const u=r[COL.username]||r[COL.nombre];
+    const raw=(r[COL.username]||r[COL.nombre]||"").trim();
+    const u=userKey[raw]||raw;
     const k=r[COL.dimension]?.trim();
     const p=parseFloat(r[COL.puntaje]);
     if(u&&k&&!isNaN(p)){
@@ -515,7 +546,7 @@ const distribution=useMemo(()=>{const step=mx/5;const buckets=Array.from({length
 return(<div style={{maxWidth:960,margin:"0 auto",padding:24}}><tt.Tip/>
   <h2 style={{fontSize:20,fontWeight:700,color:C.text,margin:"0 0 20px",letterSpacing:"-0.02em"}}>Resumen General</h2>
   <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:20}}>
-    {[["Evaluados",users.length],["Promedio Ponderado",fmt(avgTotal)],["Escala",`${config.scaleMin} - ${config.scaleMax}`]].map(([label,val],i)=>(
+    {[["Evaluados",users.length],["Promedio General",fmt(avgTotal)],["Escala",`${config.scaleMin} - ${config.scaleMax}`]].map(([label,val],i)=>(
       <Card key={i}><div style={{textAlign:"center",padding:4}}><div style={{fontSize:11,color:C.textLight,marginBottom:4,fontWeight:500,textTransform:"uppercase",letterSpacing:"0.05em"}}>{label}</div><div style={{fontSize:28,fontWeight:800,color:C.primary}}>{val}</div></div></Card>
     ))}
   </div>
