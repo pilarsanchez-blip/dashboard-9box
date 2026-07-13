@@ -30,7 +30,23 @@ const font=`'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif`;
 const blueShade=(val,max)=>{const pct=Math.min(Math.max(parseFloat(val)/max,0),1);const idx=Math.min(Math.floor(pct*C.scale.length),C.scale.length-1);return C.scale[idx];};
 
 const fetchSheet=async(id,name)=>{const url=`https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(name)}`;const r=await fetch(url);if(!r.ok)throw new Error(name);return d3.csvParse(await r.text()).map(row=>{const c={};for(const[k,v] of Object.entries(row)){if(k&&k.trim()!=="")c[k.trim()]=v;}return c;});};
-const parseInputs=(rows)=>{let scaleMin=0,scaleMax=5,origMin=1,origMax=5;for(const r of rows){const keys=Object.keys(r);const f=(r[keys[0]]||"").trim().toLowerCase();if(f.includes("mínimo")||f.includes("minimo")){origMin=parseFloat(r[keys[1]])||1;scaleMin=parseFloat(r[keys[2]])||parseFloat(r[keys[1]])||1;}if(f.includes("máximo")||f.includes("maximo")){origMax=parseFloat(r[keys[1]])||5;scaleMax=parseFloat(r[keys[2]])||parseFloat(r[keys[1]])||5;}}return{scaleMin,scaleMax,origMin,origMax};};
+const parseInputs=(rows)=>{
+  const safeNum=(v,def)=>{const n=parseFloat(v);return isNaN(n)?def:n;};
+  let scaleMin=0,scaleMax=5,origMin=0,origMax=5;
+  for(const r of rows){
+    const keys=Object.keys(r);
+    const f=(r[keys[0]]||"").trim().toLowerCase();
+    if(f.includes("mínimo")||f.includes("minimo")){
+      origMin=safeNum(r[keys[1]],0);
+      scaleMin=safeNum(r[keys[2]],safeNum(r[keys[1]],0));
+    }
+    if(f.includes("máximo")||f.includes("maximo")){
+      origMax=safeNum(r[keys[1]],5);
+      scaleMax=safeNum(r[keys[2]],safeNum(r[keys[1]],5));
+    }
+  }
+  return{scaleMin,scaleMax,origMin,origMax};
+};
 const norm=(s)=>s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
 const fmt=(n)=>{const v=parseFloat(n);return isNaN(v)?"0.0":v.toFixed(1);};
 
@@ -605,7 +621,7 @@ const loadData=async()=>{setLoading(true);setError(null);try{
   const results=await Promise.allSettled([fetchSheet(sheetId,SHEET_NAMES.inputs),fetchSheet(sheetId,SHEET_NAMES.total),fetchSheet(sheetId,SHEET_NAMES.competencia),fetchSheet(sheetId,SHEET_NAMES.direccion),fetchSheet(sheetId,SHEET_NAMES.dirCompetencia),fetchSheet(sheetId,SHEET_NAMES.respuestas),fetchSheet(sheetId,SHEET_NAMES.comentarios),fetchSheet(sheetId,SHEET_NAMES.respuestasAbiertas)]);
   const[iR,tR,cR,dR,dcR,rR,comR,raR]=results;
   if(tR.status==="rejected")throw new Error("Error al cargar datos principales");
-  const cfg=iR.status==="fulfilled"?parseInputs(iR.value):{scaleMin:1,scaleMax:5,origMin:1,origMax:5};
+  const cfg=iR.status==="fulfilled"?parseInputs(iR.value):{scaleMin:0,scaleMax:100,origMin:0,origMax:5};
   setConfig(cfg);setMapping(generateMapping(cfg.origMin,cfg.origMax,cfg.scaleMax,"normalized"));
   const dirData=dR.status==="fulfilled"?dR.value:[];setDirWeights(detectDirections(dirData));
   setData({total:tR.value,comp:cR.status==="fulfilled"?cR.value:[],dir:dirData,dirComp:dcR.status==="fulfilled"?dcR.value:[],resp:rR.status==="fulfilled"?rR.value:[],comments:comR.status==="fulfilled"?comR.value:[],respuestasAbiertas:raR?.status==="fulfilled"?raR.value:[]});
@@ -617,7 +633,7 @@ const loadData=async()=>{setLoading(true);setError(null);try{
       if(ptR.status==="rejected"){setPotWarning("No se pudo cargar la pestaña 'Total por colaborador' del Sheet de Potencial.");setPotData(null);setPotConfig(null);}
       else if(!ptR.value||ptR.value.length===0){setPotWarning("La pestaña 'Total por colaborador' del Sheet de Potencial está vacía.");setPotData(null);setPotConfig(null);}
       else{
-        const pCfg=piR.status==="fulfilled"?parseInputs(piR.value):{scaleMin:1,scaleMax:5,origMin:1,origMax:5};
+        const pCfg=piR.status==="fulfilled"?parseInputs(piR.value):{scaleMin:0,scaleMax:100,origMin:0,origMax:5};
         setPotConfig(pCfg);setPotMapping(generateMapping(pCfg.origMin,pCfg.origMax,pCfg.scaleMax,"normalized"));
         const potDirData=pdR.status==="fulfilled"?pdR.value:[];setPotDirWeights(detectDirections(potDirData));
         setPotData({total:ptR.value,comp:pcR.status==="fulfilled"?pcR.value:[],dir:potDirData,dirComp:pdcR.status==="fulfilled"?pdcR.value:[],resp:prR.status==="fulfilled"?prR.value:[]});
