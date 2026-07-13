@@ -54,9 +54,9 @@ const fmt=(n)=>{const v=parseFloat(n);return isNaN(v)?"0.0":v.toFixed(1);};
 const generateMapping=(origMin,origMax,scaleMax,preset)=>{const map={};for(let i=origMin;i<=origMax;i++){if(preset==="proportional")map[i]=Math.round((i/origMax)*scaleMax*10)/10;else map[i]=Math.round(((i-origMin)/(origMax-origMin))*scaleMax*10)/10;}return map;};
 const interpolateMapping=(val,mapping)=>{const keys=Object.keys(mapping).map(Number).sort((a,b)=>a-b);if(!keys.length)return val;const n=parseFloat(val);if(isNaN(n))return 0;if(n<=keys[0])return mapping[keys[0]];if(n>=keys[keys.length-1])return mapping[keys[keys.length-1]];for(let i=0;i<keys.length-1;i++){if(n>=keys[i]&&n<=keys[i+1]){const t=(n-keys[i])/(keys[i+1]-keys[i]);return mapping[keys[i]]+t*(mapping[keys[i+1]]-mapping[keys[i]]);}}return mapping[keys[keys.length-1]];};
 
-/* ─── FIX: datos ya vienen en escala origMin-origMax, pasar directo al mapping ─── */
-const remapScale=(pct,config,mapping)=>{const n=parseFloat(pct);if(isNaN(n))return 0;return interpolateMapping(n,mapping);};
-const remapResp=(val,config,mapping)=>{const n=parseFloat(val);if(isNaN(n))return 0;return interpolateMapping(n,mapping);};
+/* ─── FIX: detectar si datos ya vienen en escala final (0-100) o en escala original (0-5) ─── */
+const remapScale=(pct,config,mapping)=>{const n=parseFloat(pct);if(isNaN(n))return 0;if(n>config.origMax&&config.origMax<config.scaleMax)return n;return interpolateMapping(n,mapping);};
+const remapResp=(val,config,mapping)=>{const n=parseFloat(val);if(isNaN(n))return 0;if(n>config.origMax&&config.origMax<config.scaleMax)return n;return interpolateMapping(n,mapping);};
 
 /* ─── Direction weights ─── */
 const detectDirections=(dirData)=>{
