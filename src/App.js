@@ -517,14 +517,8 @@ return`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${ud.name}</title
 const Overview=({data,config,scaleVal,mx,users,mapping,dirWeights})=>{const tt=useTooltip();
 const userScores=useMemo(()=>users.map(u=>{const ud=buildUserData(data,u.username);if(!ud)return{...u,score:0};return{...u,score:computeWeightedTotal(ud,scaleVal,dirWeights)};}),[data,users,scaleVal,dirWeights]);
 const avgTotal=useMemo(()=>{
-  // Average the puntaje directly from Total sheet, one per unique user (last cycle wins if multiple)
-  const seen={};
-  data.total.forEach(r=>{
-    const u=(r[COL.username]||r[COL.nombre]||"").trim();
-    const p=parseFloat(r[COL.puntaje]);
-    if(u&&!isNaN(p)&&p>0)seen[u]=p;
-  });
-  const vals=Object.values(seen);
+  // Simple average of all puntaje rows in Total sheet — matches =AVERAGE(D:D) in Google Sheets
+  const vals=data.total.map(r=>parseFloat(r[COL.puntaje])).filter(n=>!isNaN(n)&&n>0);
   return vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:0;
 },[data]);
 const dimAvgs=useMemo(()=>{
